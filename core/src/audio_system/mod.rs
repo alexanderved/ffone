@@ -8,11 +8,9 @@ use virtual_microphone::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use mueue::{Message, MessageEndpoint, MessageSender, MessageReceiver, unidirectional_queue};
+use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
 
-pub enum AudioSystemMessage {
-
-}
+pub enum AudioSystemMessage {}
 
 impl Message for AudioSystemMessage {}
 
@@ -52,9 +50,7 @@ impl AudioSystem {
         let active_audio_processor = audio_processors
             .get_mut(&active_audio_processor_info)
             .unwrap();
-        let active_virtual_mic = virtual_mics
-            .get_mut(&active_virtual_mic_info)
-            .unwrap();
+        let active_virtual_mic = virtual_mics.get_mut(&active_virtual_mic_info).unwrap();
 
         active_audio_processor.set_message_input(audio_processor_input);
         active_audio_processor.connect_to(active_virtual_mic.as_audio_filter_mut());
@@ -93,9 +89,7 @@ impl AudioSystem {
         let _ = self.controller_endoint().send(Arc::new(msg));
     }
 
-    pub fn update(&mut self) {
-
-    }
+    pub fn update(&mut self) {}
 
     pub fn run(&mut self) {
         loop {

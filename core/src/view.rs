@@ -1,8 +1,6 @@
 use mueue::{Message, MessageEndpoint};
 
-pub enum ViewRequest {
-    
-}
+pub enum ViewRequest {}
 
 impl Message for ViewRequest {}
 
