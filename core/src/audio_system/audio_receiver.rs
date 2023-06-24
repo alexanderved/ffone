@@ -1,10 +1,10 @@
 use super::audio_filter::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AudioProcessorInfo {
+pub struct AudioReceiverInfo {
     name: String,
 }
 
-pub trait AudioProcessor: AudioFilter {
-    fn info(&self) -> AudioProcessorInfo;
+pub trait AudioReceiver: AudioFilter {
+    fn info(&self) -> AudioReceiverInfo;
 }

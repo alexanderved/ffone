@@ -3,16 +3,20 @@ use super::*;
 use mueue::*;
 
 pub trait AudioFilter: AsAudioFilter {
-    fn connect_controller(&mut self, end: MessageEndpoint);
-    fn send_message(&self, msg: AudioSystemMessage);
+    fn controller_endpoint(&self) -> ControllerEndpoint;
+    fn connect_controller(&mut self, end: ControllerEndpoint);
 
-    fn set_message_input(&mut self, input: MessageReceiver);
-    fn set_message_output(&mut self, output: MessageSender);
+    fn set_message_input(&mut self, input: DynMessageReceiver);
+    fn set_message_output(&mut self, output: DynMessageSender);
 
     fn update(&mut self);
 
+    fn send_message(&self, msg: AudioSystemNotification) {
+        let _ = self.controller_endpoint().send(Arc::new(msg));
+    }
+
     fn connect_to(&mut self, other: &mut dyn AudioFilter) {
-        let (output, input) = unidirectional_queue();
+        let (output, input) = unidirectional_queue_dyn();
 
         self.set_message_output(output);
         other.set_message_input(input);

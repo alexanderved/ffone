@@ -1,27 +1,29 @@
 pub mod audio_filter;
-pub mod audio_processor;
+pub mod audio_receiver;
 pub mod virtual_microphone;
 
-use audio_processor::*;
+//use audio_filter::*;
+use audio_receiver::*;
 use virtual_microphone::*;
+
+use crate::controller::AudioSystemControlMessage;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
+use mueue::{Message, MessageEndpoint};
 
-pub enum AudioSystemMessage {}
+type ControllerEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemNotification>;
 
-impl Message for AudioSystemMessage {}
+pub enum AudioSystemNotification {}
+
+impl Message for AudioSystemNotification {}
 
 pub struct AudioSystem {
-    controller_end: Option<MessageEndpoint>,
+    controller_end: Option<ControllerEndpoint>,
 
-    audio_message_output: MessageSender,
-    audio_message_input: MessageReceiver,
-
-    active_audio_processor_info: AudioProcessorInfo,
-    audio_processors: HashMap<AudioProcessorInfo, Box<dyn AudioProcessor>>,
+    active_audio_processor_info: AudioReceiverInfo,
+    audio_processors: HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
 
     active_virtual_mic_info: VirtualMicrophoneInfo,
     virtual_mics: HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
@@ -29,7 +31,7 @@ pub struct AudioSystem {
 
 impl AudioSystem {
     pub fn new(
-        mut audio_processors: Vec<Box<dyn AudioProcessor>>,
+        mut audio_processors: Vec<Box<dyn AudioReceiver>>,
         mut virtual_mics: Vec<Box<dyn VirtualMicrophone>>,
     ) -> Self {
         let active_audio_processor_info = audio_processors[0].info();
@@ -44,23 +46,15 @@ impl AudioSystem {
             .map(|virtual_mic| (virtual_mic.info(), virtual_mic))
             .collect::<HashMap<_, _>>();
 
-        let (audio_message_output, audio_processor_input) = unidirectional_queue();
-        let (virtual_mic_output, audio_message_input) = unidirectional_queue();
-
         let active_audio_processor = audio_processors
             .get_mut(&active_audio_processor_info)
             .unwrap();
         let active_virtual_mic = virtual_mics.get_mut(&active_virtual_mic_info).unwrap();
 
-        active_audio_processor.set_message_input(audio_processor_input);
         active_audio_processor.connect_to(active_virtual_mic.as_audio_filter_mut());
-        active_virtual_mic.set_message_output(virtual_mic_output);
 
         Self {
             controller_end: None,
-
-            audio_message_output,
-            audio_message_input,
 
             active_audio_processor_info,
             audio_processors,
@@ -70,11 +64,11 @@ impl AudioSystem {
         }
     }
 
-    pub fn controller_endoint(&self) -> MessageEndpoint {
+    pub fn controller_endoint(&self) -> ControllerEndpoint {
         self.controller_end.clone().unwrap()
     }
 
-    pub fn connect_controller(&mut self, end: MessageEndpoint) {
+    pub fn connect_controller(&mut self, end: ControllerEndpoint) {
         self.controller_end = Some(end.clone());
 
         self.audio_processors
@@ -85,11 +79,13 @@ impl AudioSystem {
             .for_each(|virtual_mic| virtual_mic.connect_controller(end.clone()));
     }
 
-    pub fn send_message(&self, msg: AudioSystemMessage) {
+    pub fn send_message(&self, msg: AudioSystemNotification) {
         let _ = self.controller_endoint().send(Arc::new(msg));
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+
+    }
 
     pub fn run(&mut self) {
         loop {

@@ -1,9 +1,12 @@
+use crate::audio_system::AudioSystemNotification;
+use crate::view::ViewRequest;
+
 use std::sync::Arc;
 
-use mueue::{Message, MessageEndpoint, MessageIterator};
+use mueue::{Message, MessageEndpoint, MessageIterator, IteratorRun};
 
-use crate::audio_system::AudioSystemMessage;
-use crate::view::ViewRequest;
+type ViewEndpoint = MessageEndpoint<ViewRequest, ViewControlMessage>;
+type AudioSystemEndpoint = MessageEndpoint<AudioSystemNotification, AudioSystemControlMessage>;
 
 pub enum ControlMessage {
     View(ViewControlMessage),
@@ -21,8 +24,8 @@ pub enum AudioSystemControlMessage {}
 impl Message for AudioSystemControlMessage {}
 
 pub struct Controller {
-    view_end: Option<MessageEndpoint>,
-    audio_system_end: Option<MessageEndpoint>,
+    view_end: Option<ViewEndpoint>,
+    audio_system_end: Option<AudioSystemEndpoint>,
 }
 
 impl Controller {
@@ -33,21 +36,21 @@ impl Controller {
         }
     }
 
-    pub fn connect_view(&mut self, end: MessageEndpoint) {
+    pub fn connect_view(&mut self, end: ViewEndpoint) {
         self.view_end = Some(end);
     }
 
-    pub fn view_endpoint(&self) -> MessageEndpoint {
+    pub fn view_endpoint(&self) -> ViewEndpoint {
         self.view_end
             .clone()
             .expect("A view message endpoint wasn't set")
     }
 
-    pub fn connect_audio_system(&mut self, end: MessageEndpoint) {
+    pub fn connect_audio_system(&mut self, end: AudioSystemEndpoint) {
         self.audio_system_end = Some(end);
     }
 
-    pub fn audio_system_endpoint(&self) -> MessageEndpoint {
+    pub fn audio_system_endpoint(&self) -> AudioSystemEndpoint {
         self.audio_system_end
             .clone()
             .expect("An audio system message endpoint wasn't set")
@@ -67,12 +70,12 @@ impl Controller {
     pub fn update(&mut self) {
         self.view_endpoint()
             .iter()
-            .handle(|_msg: Arc<ViewRequest>| todo!())
+            .handle(|_msg| todo!())
             .run();
 
         self.audio_system_endpoint()
             .iter()
-            .handle(|_msg: Arc<AudioSystemMessage>| todo!())
+            .handle(|_msg| todo!())
             .run();
     }
 
