@@ -1,4 +1,4 @@
-use crate::audio_system::AudioSystemNotification;
+use crate::audio_system::AudioSystemMessage;
 use crate::view::ViewRequest;
 
 use std::sync::Arc;
@@ -6,7 +6,7 @@ use std::sync::Arc;
 use mueue::{Message, MessageEndpoint, MessageIterator, IteratorRun};
 
 type ViewEndpoint = MessageEndpoint<ViewRequest, ViewControlMessage>;
-type AudioSystemEndpoint = MessageEndpoint<AudioSystemNotification, AudioSystemControlMessage>;
+type AudioSystemEndpoint = MessageEndpoint<AudioSystemMessage, AudioSystemControlMessage>;
 
 pub enum ControlMessage {
     View(ViewControlMessage),
@@ -56,7 +56,7 @@ impl Controller {
             .expect("An audio system message endpoint wasn't set")
     }
 
-    pub fn send_message(&self, msg: ControlMessage) {
+    pub fn send(&self, msg: ControlMessage) {
         match msg {
             ControlMessage::View(view_msg) => {
                 let _ = self.view_endpoint().send(Arc::new(view_msg));
