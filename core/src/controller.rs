@@ -34,18 +34,14 @@ impl Controller {
         }
     }
 
-    pub fn connect_view(&mut self, end: ViewEndpoint) {
-        self.view_end = Some(end);
-    }
-
     pub fn view_endpoint(&self) -> ViewEndpoint {
         self.view_end
             .clone()
             .expect("A view message endpoint wasn't set")
     }
 
-    pub fn connect_audio_system(&mut self, end: AudioSystemEndpoint) {
-        self.audio_system_end = Some(end);
+    pub fn connect_view(&mut self, end: ViewEndpoint) {
+        self.view_end = Some(end);
     }
 
     pub fn audio_system_endpoint(&self) -> AudioSystemEndpoint {
@@ -54,14 +50,18 @@ impl Controller {
             .expect("An audio system message endpoint wasn't set")
     }
 
-    pub fn connect_device(&mut self, end: DeviceEndpoint) {
-        self.device_end = Some(end);
+    pub fn connect_audio_system(&mut self, end: AudioSystemEndpoint) {
+        self.audio_system_end = Some(end);
     }
 
     pub fn device_endpoint(&self) -> DeviceEndpoint {
         self.device_end
             .clone()
             .expect("A device message endpoint wasn't set")
+    }
+
+    pub fn connect_device(&mut self, end: DeviceEndpoint) {
+        self.device_end = Some(end);
     }
 
     pub fn send(&self, msg: ControlMessage) {

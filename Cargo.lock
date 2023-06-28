@@ -39,6 +39,7 @@ name = "ffone_core"
 version = "0.1.0"
 dependencies = [
  "mueue",
+ "paste",
 ]
 
 [[package]]
@@ -49,3 +50,9 @@ checksum = "3548699821ad6334755e1bfa4d8eba6ad5b79302cd89da1f7463678d2e2f46e9"
 dependencies = [
  "crossbeam-channel",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
