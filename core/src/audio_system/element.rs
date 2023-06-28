@@ -1,4 +1,5 @@
 use super::*;
+use crate::*;
 
 use mueue::*;
 
@@ -6,11 +7,9 @@ pub enum AudioSystemNotification {}
 
 impl Message for AudioSystemNotification {}
 
-pub trait AudioSystemElement {
+pub trait AudioSystemElement: Runnable {
     fn notification_sender(&self) -> MessageSender<AudioSystemNotification>;
     fn connect(&mut self, send: MessageSender<AudioSystemNotification>);
-
-    fn update(&mut self);
 
     fn send(&self, msg: AudioSystemNotification) {
         let _ = self.notification_sender().send(Arc::new(msg));
