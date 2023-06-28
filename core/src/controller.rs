@@ -1,16 +1,19 @@
-use crate::audio_system::AudioSystemMessage;
-use crate::view::ViewRequest;
+use crate::audio_system::*;
+use crate::view::*;
+use crate::device_link::*;
 
 use std::sync::Arc;
 
-use mueue::{Message, MessageEndpoint, MessageIterator, IteratorRun};
+use mueue::{IteratorRun, Message, MessageEndpoint, MessageIterator};
 
 type ViewEndpoint = MessageEndpoint<ViewRequest, ViewControlMessage>;
 type AudioSystemEndpoint = MessageEndpoint<AudioSystemMessage, AudioSystemControlMessage>;
+type DeviceEndpoint = MessageEndpoint<DeviceMessage, DeviceControlMessage>;
 
 pub enum ControlMessage {
     View(ViewControlMessage),
     AudioSystem(AudioSystemControlMessage),
+    Device(DeviceControlMessage),
 }
 
 impl Message for ControlMessage {}
@@ -19,13 +22,10 @@ pub enum ViewControlMessage {}
 
 impl Message for ViewControlMessage {}
 
-pub enum AudioSystemControlMessage {}
-
-impl Message for AudioSystemControlMessage {}
-
 pub struct Controller {
     view_end: Option<ViewEndpoint>,
     audio_system_end: Option<AudioSystemEndpoint>,
+    device_end: Option<DeviceEndpoint>,
 }
 
 impl Controller {
@@ -33,6 +33,7 @@ impl Controller {
         Self {
             view_end: None,
             audio_system_end: None,
+            device_end: None,
         }
     }
 
@@ -56,6 +57,16 @@ impl Controller {
             .expect("An audio system message endpoint wasn't set")
     }
 
+    pub fn connect_device(&mut self, end: DeviceEndpoint) {
+        self.device_end = Some(end);
+    }
+
+    pub fn device_endpoint(&self) -> DeviceEndpoint {
+        self.device_end
+            .clone()
+            .expect("A device message endpoint wasn't set")
+    }
+
     pub fn send(&self, msg: ControlMessage) {
         match msg {
             ControlMessage::View(view_msg) => {
@@ -63,15 +74,15 @@ impl Controller {
             }
             ControlMessage::AudioSystem(audio_sys_msg) => {
                 let _ = self.audio_system_endpoint().send(Arc::new(audio_sys_msg));
+            },
+            ControlMessage::Device(device_msg) => {
+                let _ = self.device_endpoint().send(Arc::new(device_msg));
             }
         }
     }
 
     pub fn update(&mut self) {
-        self.view_endpoint()
-            .iter()
-            .handle(|_msg| todo!())
-            .run();
+        self.view_endpoint().iter().handle(|_msg| todo!()).run();
 
         self.audio_system_endpoint()
             .iter()
