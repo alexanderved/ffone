@@ -1,3 +1,4 @@
+use crate::*;
 use crate::audio_system::*;
 use crate::view::*;
 use crate::device_link::*;
@@ -76,19 +77,15 @@ impl Controller {
             }
         }
     }
+}
 
-    pub fn update(&mut self) {
+impl Runnable for Controller {
+    fn update(&mut self) {
         self.view_endpoint().iter().handle(|_msg| todo!()).run();
 
         self.audio_system_endpoint()
             .iter()
             .handle(|_msg| todo!())
             .run();
-    }
-
-    pub fn run(&mut self) {
-        loop {
-            self.update();
-        }
     }
 }
