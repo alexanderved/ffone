@@ -1,32 +1,42 @@
-pub mod element;
 pub mod audio_receiver;
+pub mod element;
 pub mod virtual_microphone;
 
 use audio_receiver::*;
-use virtual_microphone::*;
 use element::*;
+use virtual_microphone::*;
 
-use crate::controller::AudioSystemControlMessage;
+use crate::*;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use mueue::{Message, MessageEndpoint, MessageReceiver, unidirectional_queue};
+use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
 
-type ControllerEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
+type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
 pub enum AudioSystemMessage {
-    Notification(AudioSystemNotification),
+    Notification(Arc<AudioSystemNotification>),
 }
 
 impl Message for AudioSystemMessage {}
 
-pub struct AudioSystem {
-    controller_end: Option<ControllerEndpoint>,
-    notifications_receiver: MessageReceiver<AudioSystemNotification>,
+impl From<Arc<AudioSystemNotification>> for AudioSystemMessage {
+    fn from(msg: Arc<AudioSystemNotification>) -> Self {
+        Self::Notification(msg)
+    }
+}
 
-    active_audio_processor_info: AudioReceiverInfo,
-    audio_processors: HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
+pub enum AudioSystemControlMessage {}
+
+impl Message for AudioSystemControlMessage {}
+
+pub struct AudioSystem {
+    endpoint: Option<AudioSystemEndpoint>,
+    notification_receiver: MessageReceiver<AudioSystemNotification>,
+
+    active_audio_receiver_info: AudioReceiverInfo,
+    audio_receivers: HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
 
     active_virtual_mic_info: VirtualMicrophoneInfo,
     virtual_mics: HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
@@ -34,71 +44,114 @@ pub struct AudioSystem {
 
 impl AudioSystem {
     pub fn new(
-        mut audio_processors: Vec<Box<dyn AudioReceiver>>,
-        mut virtual_mics: Vec<Box<dyn VirtualMicrophone>>,
+        audio_receivers: Vec<Box<dyn AudioReceiver>>,
+        virtual_mics: Vec<Box<dyn VirtualMicrophone>>,
     ) -> Self {
-        let (notifications_sender, notifications_receiver) = unidirectional_queue();
+        let (notification_sender, notification_receiver) = unidirectional_queue();
 
-        let active_audio_processor_info = audio_processors[0].info();
-        let mut audio_processors = audio_processors
-            .drain(..)
-            .map(|mut audio_proc| {
-                audio_proc.connect(notifications_sender.clone());
-                audio_proc
-            })
-            .map(|audio_proc| (audio_proc.info(), audio_proc))
-            .collect::<HashMap<_, _>>();
+        let mut audio_receivers = collect_audio_receivers_map(audio_receivers);
+        connect_audio_receivers(&mut audio_receivers, notification_sender.clone());
+        let active_audio_receiver = choose_best_audio_receiver(&mut audio_receivers);
 
-        let active_virtual_mic_info = virtual_mics[0].info();
-        let mut virtual_mics = virtual_mics
-            .drain(..)
-            .map(|mut virtual_mic| {
-                virtual_mic.connect(notifications_sender.clone());
-                virtual_mic
-            })
-            .map(|virtual_mic| (virtual_mic.info(), virtual_mic))
-            .collect::<HashMap<_, _>>();
+        let mut virtual_mics = collect_virtual_microphones_map(virtual_mics);
+        connect_virtual_microphones(&mut virtual_mics, notification_sender);
+        let active_virtual_mic = choose_best_virtual_microphone(&mut virtual_mics);
 
-        let active_audio_processor = audio_processors
-            .get_mut(&active_audio_processor_info)
-            .unwrap();
-        let active_virtual_mic = virtual_mics.get_mut(&active_virtual_mic_info).unwrap();
-
-        active_audio_processor
+        active_audio_receiver
             .as_audio_source_mut()
             .chain(active_virtual_mic.as_audio_sink_mut());
 
         Self {
-            controller_end: None,
-            notifications_receiver,
+            endpoint: None,
+            notification_receiver,
 
-            active_audio_processor_info,
-            audio_processors,
+            active_audio_receiver_info: active_audio_receiver.info(),
+            audio_receivers,
 
-            active_virtual_mic_info,
+            active_virtual_mic_info: active_virtual_mic.info(),
             virtual_mics,
         }
     }
 
-    pub fn controller_endoint(&self) -> ControllerEndpoint {
-        self.controller_end.clone().unwrap()
-    }
-
-    pub fn connect(&mut self, end: ControllerEndpoint) {
-        self.controller_end = Some(end.clone());
-    }
-
     pub fn send(&self, msg: AudioSystemMessage) {
-        let _ = self.controller_endoint().send(Arc::new(msg));
+        let _ = self.endpoint().send(Arc::new(msg));
+    }
+}
+
+impl Component for AudioSystem {
+    type Message = AudioSystemMessage;
+    type ControlMessage = AudioSystemControlMessage;
+
+    fn endpoint(&self) -> MessageEndpoint<Self::ControlMessage, Self::Message> {
+        self.endpoint.clone().unwrap()
     }
 
-    pub fn update(&mut self) {
-
+    fn connect(&mut self, end: MessageEndpoint<Self::ControlMessage, Self::Message>) {
+        self.endpoint = Some(end);
     }
+}
 
-    pub fn run(&mut self) {
-        loop {
-            self.update();
-        }
+impl Runnable for AudioSystem {
+    fn update(&mut self) {
+        self.notification_receiver
+            .forward(self.endpoint().as_sender().clone());
+
+        todo!()
     }
+}
+
+fn collect_audio_receivers_map(
+    mut audio_receivers: Vec<Box<dyn AudioReceiver>>,
+) -> HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>> {
+    audio_receivers
+        .drain(..)
+        .map(|audio_recv| (audio_recv.info(), audio_recv))
+        .collect()
+}
+
+fn connect_audio_receivers(
+    audio_receivers: &mut HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
+    notification_sender: MessageSender<AudioSystemNotification>,
+) {
+    audio_receivers
+        .values_mut()
+        .for_each(|audio_recv| audio_recv.connect(notification_sender.clone()));
+}
+
+// TODO: Change algorithm for choosing the best audio receiver.
+fn choose_best_audio_receiver(
+    audio_receivers: &mut HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
+) -> &mut dyn AudioReceiver {
+    &mut **audio_receivers
+        .values_mut()
+        .next()
+        .expect("No audio receivers were provided")
+}
+
+fn collect_virtual_microphones_map(
+    mut virtual_mics: Vec<Box<dyn VirtualMicrophone>>,
+) -> HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>> {
+    virtual_mics
+        .drain(..)
+        .map(|virtual_mic| (virtual_mic.info(), virtual_mic))
+        .collect()
+}
+
+fn connect_virtual_microphones(
+    virtual_mics: &mut HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
+    notification_sender: MessageSender<AudioSystemNotification>,
+) {
+    virtual_mics
+        .values_mut()
+        .for_each(|virtual_mic| virtual_mic.connect(notification_sender.clone()));
+}
+
+// TODO: Change algorithm for choosing the best virtual microphones.
+fn choose_best_virtual_microphone(
+    virtual_mics: &mut HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
+) -> &mut dyn VirtualMicrophone {
+    &mut **virtual_mics
+        .values_mut()
+        .next()
+        .expect("No virtual microphones were provided")
 }
