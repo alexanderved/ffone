@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 mueue = "0.2.3"
+paste = "1.0.12"

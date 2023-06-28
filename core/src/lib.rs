@@ -3,6 +3,7 @@ pub extern crate mueue;
 pub mod audio_system;
 pub mod controller;
 pub mod device_link;
+mod util;
 pub mod view;
 
 use std::sync::Arc;
@@ -21,7 +22,7 @@ pub trait Component {
     }
 }
 
-pub trait Runnable {
+pub trait Runnable: AsRunnable {
     fn update(&mut self);
 
     fn run(&mut self) {
@@ -30,3 +31,5 @@ pub trait Runnable {
         }
     }
 }
+
+impl_as_trait!(runnable -> Runnable);

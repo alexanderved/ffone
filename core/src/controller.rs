@@ -1,7 +1,7 @@
-use crate::*;
 use crate::audio_system::*;
-use crate::view::*;
 use crate::device_link::*;
+use crate::view::*;
+use crate::*;
 
 use std::sync::Arc;
 
@@ -71,7 +71,7 @@ impl Controller {
             }
             ControlMessage::AudioSystem(audio_sys_msg) => {
                 let _ = self.audio_system_endpoint().send(Arc::new(audio_sys_msg));
-            },
+            }
             ControlMessage::Device(device_msg) => {
                 let _ = self.device_endpoint().send(Arc::new(device_msg));
             }

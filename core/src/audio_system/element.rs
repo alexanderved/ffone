@@ -16,20 +16,7 @@ pub trait AudioSystemElement: Runnable {
     }
 }
 
-pub trait AsAudioSystemElement {
-    fn as_audio_system_element(&self) -> &dyn AudioSystemElement;
-    fn as_audio_system_element_mut(&mut self) -> &mut dyn AudioSystemElement;
-}
-
-impl<E: AudioSystemElement> AsAudioSystemElement for E {
-    fn as_audio_system_element(&self) -> &dyn AudioSystemElement {
-        self
-    }
-
-    fn as_audio_system_element_mut(&mut self) -> &mut dyn AudioSystemElement {
-        self
-    }
-}
+impl_as_trait!(audio_system_element -> AudioSystemElement);
 
 pub trait AudioSource: AudioSystemElement + AsAudioSource {
     fn set_output(&mut self, output: DynMessageSender);
@@ -42,36 +29,10 @@ pub trait AudioSource: AudioSystemElement + AsAudioSource {
     }
 }
 
-pub trait AsAudioSource {
-    fn as_audio_source(&self) -> &dyn AudioSource;
-    fn as_audio_source_mut(&mut self) -> &mut dyn AudioSource;
-}
-
-impl<S: AudioSource> AsAudioSource for S {
-    fn as_audio_source(&self) -> &dyn AudioSource {
-        self
-    }
-
-    fn as_audio_source_mut(&mut self) -> &mut dyn AudioSource {
-        self
-    }
-}
+impl_as_trait!(audio_source -> AudioSource);
 
 pub trait AudioSink: AudioSystemElement + AsAudioSink {
     fn set_input(&mut self, input: DynMessageReceiver);
 }
 
-pub trait AsAudioSink {
-    fn as_audio_sink(&self) -> &dyn AudioSink;
-    fn as_audio_sink_mut(&mut self) -> &mut dyn AudioSink;
-}
-
-impl<S: AudioSink> AsAudioSink for S {
-    fn as_audio_sink(&self) -> &dyn AudioSink {
-        self
-    }
-
-    fn as_audio_sink_mut(&mut self) -> &mut dyn AudioSink {
-        self
-    }
-}
+impl_as_trait!(audio_sink -> AudioSink);
