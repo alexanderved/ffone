@@ -18,10 +18,6 @@ pub enum ControlMessage {
 
 impl Message for ControlMessage {}
 
-pub enum ViewControlMessage {}
-
-impl Message for ViewControlMessage {}
-
 pub struct Controller {
     view_end: Option<ViewEndpoint>,
     audio_system_end: Option<AudioSystemEndpoint>,

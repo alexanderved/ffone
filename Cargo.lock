@@ -43,9 +43,9 @@ dependencies = [
 
 [[package]]
 name = "mueue"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d89ed1f3340e2ff8ff834dc4f1bd9fcbc78f96d0fb202ded914204b83056bee9"
+checksum = "3548699821ad6334755e1bfa4d8eba6ad5b79302cd89da1f7463678d2e2f46e9"
 dependencies = [
  "crossbeam-channel",
 ]
