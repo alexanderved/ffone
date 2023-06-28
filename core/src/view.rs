@@ -2,15 +2,15 @@ use crate::*;
 
 use mueue::Message;
 
-pub enum ViewRequest {}
+pub enum ViewMessage {}
 
-impl Message for ViewRequest {}
+impl Message for ViewMessage {}
 
 pub enum ViewControlMessage {}
 
 impl Message for ViewControlMessage {}
 
 pub trait View:
-    Component<Message = ViewRequest, ControlMessage = ViewControlMessage> + Runnable
+    Component<Message = ViewMessage, ControlMessage = ViewControlMessage> + Runnable
 {
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use mueue::{IteratorRun, Message, MessageEndpoint, MessageIterator};
 
-type ViewEndpoint = MessageEndpoint<ViewRequest, ViewControlMessage>;
+type ViewEndpoint = MessageEndpoint<ViewMessage, ViewControlMessage>;
 type AudioSystemEndpoint = MessageEndpoint<AudioSystemMessage, AudioSystemControlMessage>;
 type DeviceEndpoint = MessageEndpoint<DeviceMessage, DeviceControlMessage>;
 
