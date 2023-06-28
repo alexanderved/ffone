@@ -2,20 +2,18 @@ use super::*;
 
 use mueue::*;
 
-pub enum AudioSystemNotification {
-
-}
+pub enum AudioSystemNotification {}
 
 impl Message for AudioSystemNotification {}
 
 pub trait AudioSystemElement {
-    fn audio_system_sender(&self) -> MessageSender<AudioSystemNotification>;
+    fn notification_sender(&self) -> MessageSender<AudioSystemNotification>;
     fn connect(&mut self, send: MessageSender<AudioSystemNotification>);
 
     fn update(&mut self);
 
     fn send(&self, msg: AudioSystemNotification) {
-        let _ = self.audio_system_sender().send(Arc::new(msg));
+        let _ = self.notification_sender().send(Arc::new(msg));
     }
 }
 
