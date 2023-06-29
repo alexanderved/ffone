@@ -83,7 +83,9 @@ impl Component for AudioSystem {
     type ControlMessage = AudioSystemControlMessage;
 
     fn endpoint(&self) -> MessageEndpoint<Self::ControlMessage, Self::Message> {
-        self.endpoint.clone().unwrap()
+        self.endpoint
+            .clone()
+            .expect("A message endpoint wasn't set")
     }
 
     fn connect(&mut self, end: MessageEndpoint<Self::ControlMessage, Self::Message>) {
