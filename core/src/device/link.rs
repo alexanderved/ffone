@@ -1,10 +1,6 @@
-use std::net::SocketAddr;
+use crate::util::{Component, Runnable};
 
-use mueue::{Message, MessageEndpoint};
-
-use crate::{Runnable, Component};
-
-type DeviceLinkEndpoint = MessageEndpoint<DeviceControlMessage, DeviceMessage>;
+use mueue::Message;
 
 pub enum DeviceMessage {}
 
