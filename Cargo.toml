@@ -7,9 +7,10 @@ edition = "2021"
 
 [dependencies]
 core = { package = "ffone_core", version = "0.1.0", path = "core" }
+lan_device = { package = "ffone_lan_device", version = "0.1.0", path = "devices/lan" }
 
-[workspaces]
+[workspace]
 members = [
     "core",
-    "devices",
+    "devices/lan",
 ]

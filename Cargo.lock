@@ -32,6 +32,7 @@ name = "ffone"
 version = "0.1.0"
 dependencies = [
  "ffone_core",
+ "ffone_lan_device",
 ]
 
 [[package]]
@@ -41,6 +42,10 @@ dependencies = [
  "mueue",
  "paste",
 ]
+
+[[package]]
+name = "ffone_lan_device"
+version = "0.1.0"
 
 [[package]]
 name = "mueue"
