@@ -2,12 +2,15 @@ use crate::util::{Component, Runnable};
 
 use mueue::Message;
 
-pub enum DeviceMessage {}
+pub enum DeviceLinkMessage {}
 
-impl Message for DeviceMessage {}
+impl Message for DeviceLinkMessage {}
 
-pub enum DeviceControlMessage {}
+pub enum DeviceLinkControlMessage {}
 
-impl Message for DeviceControlMessage {}
+impl Message for DeviceLinkControlMessage {}
 
-pub trait DeviceLink: Component + Runnable {}
+pub trait DeviceLink:
+    Component<Message = DeviceLinkMessage, ControlMessage = DeviceLinkControlMessage> + Runnable
+{
+}

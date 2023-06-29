@@ -1,7 +1,6 @@
 use crate::audio_system::*;
-//use crate::device::link::*;
-use crate::view::*;
 use crate::util::*;
+use crate::view::*;
 use crate::*;
 
 use std::sync::Arc;
@@ -10,12 +9,10 @@ use mueue::{IteratorRun, Message, MessageEndpoint, MessageIterator};
 
 type ViewEndpoint = MessageEndpoint<ViewMessage, ViewControlMessage>;
 type AudioSystemEndpoint = MessageEndpoint<AudioSystemMessage, AudioSystemControlMessage>;
-//type DeviceEndpoint = MessageEndpoint<DeviceMessage, DeviceControlMessage>;
 
 pub enum ControlMessage {
     View(ViewControlMessage),
     AudioSystem(AudioSystemControlMessage),
-    //Device(DeviceControlMessage),
 }
 
 impl Message for ControlMessage {}
@@ -23,7 +20,6 @@ impl Message for ControlMessage {}
 pub struct Controller {
     view_end: Option<ViewEndpoint>,
     audio_system_end: Option<AudioSystemEndpoint>,
-    //device_end: Option<DeviceEndpoint>,
 }
 
 impl Controller {
@@ -31,7 +27,6 @@ impl Controller {
         Self {
             view_end: None,
             audio_system_end: None,
-            //device_end: None,
         }
     }
 
@@ -55,16 +50,6 @@ impl Controller {
         self.audio_system_end = Some(end);
     }
 
-    /* pub fn device_endpoint(&self) -> DeviceEndpoint {
-        self.device_end
-            .clone()
-            .expect("A device message endpoint wasn't set")
-    }
-
-    pub fn connect_device(&mut self, end: DeviceEndpoint) {
-        self.device_end = Some(end);
-    } */
-
     pub fn send(&self, msg: ControlMessage) {
         match msg {
             ControlMessage::View(view_msg) => {
@@ -73,9 +58,6 @@ impl Controller {
             ControlMessage::AudioSystem(audio_sys_msg) => {
                 let _ = self.audio_system_endpoint().send(Arc::new(audio_sys_msg));
             }
-            /* ControlMessage::Device(device_msg) => {
-                let _ = self.device_endpoint().send(Arc::new(device_msg));
-            } */
         }
     }
 }
