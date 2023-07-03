@@ -3,9 +3,7 @@ use crate::util::*;
 use crate::view::*;
 use crate::*;
 
-use std::sync::Arc;
-
-use mueue::{IteratorRun, Message, MessageEndpoint, MessageIterator};
+use mueue::{Message, MessageEndpoint};
 
 type ViewEndpoint = MessageEndpoint<ViewMessage, ViewControlMessage>;
 type AudioSystemEndpoint = MessageEndpoint<AudioSystemMessage, AudioSystemControlMessage>;
@@ -53,23 +51,22 @@ impl Controller {
     pub fn send(&self, msg: ControlMessage) {
         match msg {
             ControlMessage::View(view_msg) => {
-                let _ = self.view_endpoint().send(Arc::new(view_msg));
+                let _ = self.view_endpoint().send(view_msg);
             }
             ControlMessage::AudioSystem(audio_sys_msg) => {
-                let _ = self.audio_system_endpoint().send(Arc::new(audio_sys_msg));
+                let _ = self.audio_system_endpoint().send(audio_sys_msg);
             }
         }
     }
 }
 
 impl Runnable for Controller {
-    fn update(&mut self) {
-        self.view_endpoint().iter().handle(|_msg| todo!()).run();
+    fn update(&mut self, _flow: &mut ControlFlow) {
+        self.view_endpoint().iter().for_each(|_msg| todo!());
 
         self.audio_system_endpoint()
             .iter()
-            .handle(|_msg| todo!())
-            .run();
+            .for_each(|_msg| todo!());
 
         todo!()
     }

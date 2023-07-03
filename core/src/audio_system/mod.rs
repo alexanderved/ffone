@@ -10,20 +10,19 @@ use crate::util::*;
 use crate::*;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
 
 type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
 pub enum AudioSystemMessage {
-    Notification(Arc<AudioSystemNotification>),
+    Notification(AudioSystemNotification),
 }
 
 impl Message for AudioSystemMessage {}
 
-impl From<Arc<AudioSystemNotification>> for AudioSystemMessage {
-    fn from(msg: Arc<AudioSystemNotification>) -> Self {
+impl From<AudioSystemNotification> for AudioSystemMessage {
+    fn from(msg: AudioSystemNotification) -> Self {
         Self::Notification(msg)
     }
 }
@@ -73,10 +72,6 @@ impl AudioSystem {
             virtual_mics,
         }
     }
-
-    pub fn send(&self, msg: AudioSystemMessage) {
-        let _ = self.endpoint().send(Arc::new(msg));
-    }
 }
 
 impl Component for AudioSystem {
@@ -95,7 +90,7 @@ impl Component for AudioSystem {
 }
 
 impl Runnable for AudioSystem {
-    fn update(&mut self) {
+    fn update(&mut self, _flow: &mut ControlFlow) {
         self.notification_receiver
             .forward(self.endpoint().as_sender().clone());
 

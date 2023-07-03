@@ -1,18 +1,27 @@
-use super::DeviceInfo;
 use super::link::DeviceLink;
+use super::DeviceInfo;
 
+use crate::error;
 use crate::util::{Component, Runnable};
 
 use mueue::*;
 
-pub enum DeviceDiscovererMessage {}
+pub type DeviceDiscovererEndpoint =
+    MessageEndpoint<DeviceDiscovererControlMessage, DeviceDiscovererMessage>;
+
+pub enum DeviceDiscovererMessage {
+    NewDeviceDiscovered(DeviceInfo),
+    DevicesEnumerated(Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>),
+    LinkOpened(Box<dyn DeviceLink>),
+    Error(error::Error),
+}
 
 impl Message for DeviceDiscovererMessage {}
 
 pub enum DeviceDiscovererControlMessage {
     EnumerateDevices,
     OpenLink(DeviceInfo),
-    CloseLink(DeviceInfo),
+    Stop,
 }
 
 impl Message for DeviceDiscovererControlMessage {}
@@ -20,9 +29,10 @@ impl Message for DeviceDiscovererControlMessage {}
 pub trait DeviceDiscoverer:
     Component<Message = DeviceDiscovererMessage, ControlMessage = DeviceDiscovererControlMessage>
     + Runnable
+    + Send
+    + Sync
 {
-    fn enumerate_devices(&self) -> Box<dyn Iterator<Item = DeviceInfo> + '_>;
+    fn enumerate_devices(&self) -> Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>;
 
-    fn open_link(&self, info: DeviceInfo) -> Box<dyn DeviceLink>;
-    fn close_link(&self, link: Box<dyn DeviceLink>);
+    fn open_link(&self, info: DeviceInfo) -> error::Result<Box<dyn DeviceLink>>;
 }

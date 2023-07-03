@@ -2,20 +2,27 @@ use super::DeviceInfo;
 
 use crate::util::{Component, Runnable};
 
-use mueue::Message;
+use mueue::{Message, MessageEndpoint};
 
-pub enum DeviceLinkMessage {}
+pub type DeviceLinkEndpoint = MessageEndpoint<DeviceLinkControlMessage, DeviceLinkMessage>;
+
+pub enum DeviceLinkMessage {
+    Info(DeviceInfo),
+}
 
 impl Message for DeviceLinkMessage {}
 
 pub enum DeviceLinkControlMessage {
-    Info,
+    GetInfo,
 }
 
 impl Message for DeviceLinkControlMessage {}
 
 pub trait DeviceLink:
-    Component<Message = DeviceLinkMessage, ControlMessage = DeviceLinkControlMessage> + Runnable
+    Component<Message = DeviceLinkMessage, ControlMessage = DeviceLinkControlMessage>
+    + Runnable
+    + Send
+    + Sync
 {
     fn info(&self) -> DeviceInfo;
 }
