@@ -13,6 +13,13 @@ pub struct LanDeviceInfo {
 }
 
 impl LanDeviceInfo {
+    pub fn new(name: &str, addr: SocketAddr) -> Self {
+        Self {
+            info: DeviceInfo::new(name),
+            addr,
+        }
+    }
+
     pub fn info(&self) -> DeviceInfo {
         self.info.clone()
     }

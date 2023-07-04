@@ -61,26 +61,31 @@ impl Component for LanDiscoverer {
 }
 
 impl Runnable for LanDiscoverer {
-    fn update(&mut self, flow: &mut ControlFlow) {
+    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
         let _ = self.discover_devices();
 
-        self.endpoint().iter().into_iter().for_each(|msg| match msg {
-            DeviceDiscovererControlMessage::EnumerateDevices => {
-                self.send(DeviceDiscovererMessage::DevicesEnumerated(
-                    self.enumerate_devices(),
-                ));
-            }
-            DeviceDiscovererControlMessage::OpenLink(info) => {
-                let msg = self.open_link(info.clone()).map_or_else(
-                    DeviceDiscovererMessage::Error,
-                    DeviceDiscovererMessage::LinkOpened,
-                );
-                self.send(msg);
-            }
-            DeviceDiscovererControlMessage::Stop => {
-                *flow = ControlFlow::Break;
-            }
-        });
+        self.endpoint()
+            .iter()
+            .into_iter()
+            .for_each(|msg| match msg {
+                DeviceDiscovererControlMessage::EnumerateDevices => {
+                    self.send(DeviceDiscovererMessage::DevicesEnumerated(
+                        self.enumerate_devices(),
+                    ));
+                }
+                DeviceDiscovererControlMessage::OpenLink(info) => {
+                    let msg = self.open_link(info.clone()).map_or_else(
+                        DeviceDiscovererMessage::Error,
+                        DeviceDiscovererMessage::LinkOpened,
+                    );
+                    self.send(msg);
+                }
+                DeviceDiscovererControlMessage::Stop => {
+                    *flow = ControlFlow::Break;
+                }
+            });
+
+        Ok(())
     }
 }
 
@@ -102,10 +107,14 @@ mod tests {
 
     use core::mueue::*;
 
+    use std::collections::HashSet;
     use std::net::UdpSocket;
     use std::net::{Ipv4Addr, SocketAddr};
     use std::thread::{self, JoinHandle};
-    use std::collections::HashSet;
+
+    struct StopDevice;
+
+    impl Message for StopDevice {}
 
     struct FakeDevice {
         recv: MessageReceiver<StopDevice>,
@@ -129,35 +138,32 @@ mod tests {
     }
 
     impl Runnable for FakeDevice {
-        fn update(&mut self, flow: &mut ControlFlow) {
+        fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
             if matches!(self.recv.recv(), Some(StopDevice)) {
                 *flow = ControlFlow::Break;
+                return Ok(());
             }
 
             let identity_packet = IdentityPacket {
                 name: self.name.clone(),
                 port: Self::PORT,
             };
-            let Ok(data) = serde_json::to_vec(&identity_packet) else {
-                return;
-            };
+            let data = serde_json::to_vec(&identity_packet)?;
 
             let _ = self.broadcast_socket.send_to(
                 &data,
                 SocketAddr::from((Ipv4Addr::BROADCAST, BROADCAST_PORT)),
             );
+
+            Ok(())
         }
     }
-
-    struct StopDevice;
-
-    impl Message for StopDevice {}
 
     fn run_device(name: &str) -> error::Result<(MessageSender<StopDevice>, JoinHandle<()>)> {
         let (device_send, device_recv) = unidirectional_queue();
         let mut device = FakeDevice::new(name, device_recv)?;
         let device_handle = thread::spawn(move || {
-            device.run();
+            let _ = device.run();
         });
 
         Ok((device_send, device_handle))
@@ -177,7 +183,7 @@ mod tests {
         discoverer.connect(disc_end1);
 
         let disc_handle = thread::spawn(move || {
-            discoverer.run();
+            let _ = discoverer.run();
         });
 
         Ok((disc_end, disc_handle))
@@ -207,15 +213,14 @@ mod tests {
                 match msg {
                     DeviceDiscovererMessage::DevicesEnumerated(devs) => {
                         infos.extend(devs);
-                    },
+                    }
                     DeviceDiscovererMessage::NewDeviceDiscovered(dev) => {
                         infos.insert(dev);
-                    },
+                    }
                     _ => unimplemented!(),
                 }
-                
             }
-        };
+        }
 
         assert!(infos.contains(&DeviceInfo::new("fake")), "{:?}", infos);
         assert!(infos.contains(&DeviceInfo::new("fake1")), "{:?}", infos);

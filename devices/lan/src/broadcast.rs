@@ -57,7 +57,7 @@ impl BroadcastListener {
             .register(&mut socket, IDENTITY_RECEIVED, Interest::READABLE)?;
 
         let events = Events::with_capacity(128);
-        let bytes = vec![0; 1024];
+        let bytes = vec![0; 128];
 
         Ok(Self {
             socket,
@@ -90,7 +90,7 @@ impl BroadcastListener {
                 lan_infos.insert((identity_packet, sender_addr.ip()).into());
             }
         }
-        
+
         Ok(lan_infos.into_iter())
     }
 }
