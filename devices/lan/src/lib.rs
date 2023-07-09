@@ -1,6 +1,7 @@
 mod broadcast;
 pub mod discoverer;
 pub mod link;
+mod network;
 
 use core::device::DeviceInfo;
 

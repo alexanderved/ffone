@@ -1,3 +1,4 @@
+use super::network::*;
 use super::*;
 
 use core::error;
@@ -10,7 +11,6 @@ use mio::net::UdpSocket;
 use mio::{Events, Interest, Poll, Token};
 
 const IDENTITY_RECEIVED: Token = Token(1);
-const SOCKET_TIMEOUT: Duration = Duration::from_micros(0);
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(super) struct IdentityPacket {
@@ -29,23 +29,10 @@ impl From<(IdentityPacket, IpAddr)> for LanDeviceInfo {
     }
 }
 
-impl From<(IpAddr, IdentityPacket)> for LanDeviceInfo {
-    fn from((ip_addr, net_packet): (IpAddr, IdentityPacket)) -> Self {
-        Self {
-            info: DeviceInfo {
-                name: net_packet.name,
-            },
-            addr: SocketAddr::new(ip_addr, net_packet.port),
-        }
-    }
-}
-
 pub(super) struct BroadcastListener {
     socket: UdpSocket,
     poll: Poll,
-
     events: Events,
-    bytes: Vec<u8>,
 }
 
 impl BroadcastListener {
@@ -57,37 +44,30 @@ impl BroadcastListener {
             .register(&mut socket, IDENTITY_RECEIVED, Interest::READABLE)?;
 
         let events = Events::with_capacity(128);
-        let bytes = vec![0; 128];
 
         Ok(Self {
             socket,
             poll,
-
             events,
-            bytes,
         })
     }
 
     pub(super) fn recv(&mut self) -> error::Result<impl Iterator<Item = LanDeviceInfo> + 'static> {
         let mut lan_infos = HashSet::new();
-        self.poll.poll(&mut self.events, Some(SOCKET_TIMEOUT))?;
+        self.poll
+            .poll(&mut self.events, Some(Duration::from_micros(0)))?;
 
-        'events: for e in self.events.iter() {
+        for e in self.events.iter() {
             if e.token() != IDENTITY_RECEIVED {
                 continue;
             }
 
-            while udp_socket_has_pending_datagram(&self.socket) {
-                let Ok((len, sender_addr)) =
-                    self.socket.recv_from(&mut self.bytes) else {
-                        continue 'events;
-                    };
-                let Ok(identity_packet) =
-                    serde_json::from_slice::<IdentityPacket>(&self.bytes[..len]) else {
-                        continue;
-                    };
+            while NetworkPacket::is_pending_from(&self.socket) {
+                let Ok(lan_info) = recv_device_info(&self.socket) else {
+                    continue;
+                };
 
-                lan_infos.insert((identity_packet, sender_addr.ip()).into());
+                lan_infos.insert(lan_info);
             }
         }
 
@@ -95,6 +75,11 @@ impl BroadcastListener {
     }
 }
 
-fn udp_socket_has_pending_datagram(socket: &UdpSocket) -> bool {
-    socket.peek_from(&mut [0]).is_ok()
+fn recv_device_info(socket: &UdpSocket) -> error::Result<LanDeviceInfo> {
+    let (packet, sender_addr) = NetworkPacket::recv_from(socket)?;
+
+    let identity = packet.deserialize::<IdentityPacket>()?;
+    let info = LanDeviceInfo::from((identity, sender_addr.ip()));
+
+    Ok(info)
 }

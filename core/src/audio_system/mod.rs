@@ -15,6 +15,7 @@ use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, Mes
 
 type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
+#[non_exhaustive]
 pub enum AudioSystemMessage {
     Notification(AudioSystemNotification),
 }
@@ -27,7 +28,10 @@ impl From<AudioSystemNotification> for AudioSystemMessage {
     }
 }
 
-pub enum AudioSystemControlMessage {}
+#[non_exhaustive]
+pub enum AudioSystemControlMessage {
+    Stop,
+}
 
 impl Message for AudioSystemControlMessage {}
 
@@ -90,9 +94,13 @@ impl Component for AudioSystem {
 }
 
 impl Runnable for AudioSystem {
-    fn update(&mut self, _flow: &mut ControlFlow) {
+    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
         self.notification_receiver
             .forward(self.endpoint().as_sender().clone());
+
+        self.endpoint()
+            .iter()
+            .for_each(|msg| msg.handle(self, &mut *flow));
 
         todo!()
     }
@@ -152,4 +160,10 @@ fn choose_best_virtual_microphone(
         .values_mut()
         .next()
         .expect("No virtual microphones were provided")
+}
+
+crate::impl_control_message_handler! {
+    @concrete_component AudioSystem;
+    @message AudioSystemMessage;
+    @control_message AudioSystemControlMessage;
 }

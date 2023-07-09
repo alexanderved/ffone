@@ -1,3 +1,8 @@
+use super::broadcast::*;
+use super::*;
+
+use crate::link::LanLink;
+
 use core::device::discoverer::*;
 use core::device::link::*;
 use core::device::*;
@@ -5,11 +10,8 @@ use core::error;
 use core::util::ControlFlow;
 use core::util::{Component, Runnable};
 
-use super::broadcast::*;
-use super::*;
-use crate::link::LanLink;
-
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 pub const BROADCAST_PORT: u16 = 31703;
 
@@ -30,18 +32,19 @@ impl LanDiscoverer {
         })
     }
 
-    fn discover_devices(&mut self) -> error::Result<()> {
+    fn discover_devices(
+        &mut self,
+    ) -> error::Result<Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>> {
+        let mut new_devices = HashSet::new();
         self.broadcast.recv()?.for_each(|lan_info| {
             self.infos
                 .insert(lan_info.info(), lan_info.clone())
                 .map(|_| {
-                    self.send(DeviceDiscovererMessage::NewDeviceDiscovered(
-                        lan_info.info(),
-                    ))
+                    new_devices.insert(lan_info.info());
                 });
         });
 
-        Ok(())
+        Ok(Box::new(new_devices.into_iter()))
     }
 }
 
@@ -62,28 +65,15 @@ impl Component for LanDiscoverer {
 
 impl Runnable for LanDiscoverer {
     fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
-        let _ = self.discover_devices();
+        let msg = self.discover_devices().map_or_else(
+            DeviceDiscovererMessage::Error,
+            DeviceDiscovererMessage::NewDevicesDiscovered,
+        );
+        self.send(msg);
 
         self.endpoint()
             .iter()
-            .into_iter()
-            .for_each(|msg| match msg {
-                DeviceDiscovererControlMessage::EnumerateDevices => {
-                    self.send(DeviceDiscovererMessage::DevicesEnumerated(
-                        self.enumerate_devices(),
-                    ));
-                }
-                DeviceDiscovererControlMessage::OpenLink(info) => {
-                    let msg = self.open_link(info.clone()).map_or_else(
-                        DeviceDiscovererMessage::Error,
-                        DeviceDiscovererMessage::LinkOpened,
-                    );
-                    self.send(msg);
-                }
-                DeviceDiscovererControlMessage::Stop => {
-                    *flow = ControlFlow::Break;
-                }
-            });
+            .for_each(|msg| msg.handle(self, &mut *flow));
 
         Ok(())
     }
@@ -94,16 +84,23 @@ impl DeviceDiscoverer for LanDiscoverer {
         Box::new(self.infos.clone().into_iter().map(|(k, _)| k))
     }
 
-    fn open_link(&self, info: DeviceInfo) -> error::Result<Box<dyn DeviceLink>> {
-        Ok(Box::new(LanLink::new(
-            self.infos.get(&info).ok_or(error::Error::None)?.clone(),
-        )?))
+    fn open_link(&mut self, info: DeviceInfo) -> error::Result<Box<dyn DeviceLink>> {
+        let lan_info = self.infos.get(&info).ok_or(error::Error::NoDevice)?.clone();
+        let link = LanLink::new(lan_info);
+
+        if link.is_err() {
+            self.infos.remove(&info);
+            self.send(DeviceDiscovererMessage::DeviceUnreachable(info));
+        }
+
+        Ok(Box::new(link?))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::network::*;
 
     use core::mueue::*;
 
@@ -148,10 +145,10 @@ mod tests {
                 name: self.name.clone(),
                 port: Self::PORT,
             };
-            let data = serde_json::to_vec(&identity_packet)?;
+            let data = NetworkPacket::serialize(&identity_packet)?;
 
             let _ = self.broadcast_socket.send_to(
-                &data,
+                data.as_ref(),
                 SocketAddr::from((Ipv4Addr::BROADCAST, BROADCAST_PORT)),
             );
 
@@ -212,10 +209,11 @@ mod tests {
             for msg in disc_end.iter() {
                 match msg {
                     DeviceDiscovererMessage::DevicesEnumerated(devs) => {
+                        infos.clear();
                         infos.extend(devs);
                     }
-                    DeviceDiscovererMessage::NewDeviceDiscovered(dev) => {
-                        infos.insert(dev);
+                    DeviceDiscovererMessage::NewDevicesDiscovered(devs) => {
+                        infos.extend(devs);
                     }
                     _ => unimplemented!(),
                 }

@@ -2,15 +2,25 @@ use crate::util::*;
 
 use mueue::Message;
 
+#[non_exhaustive]
 pub enum ViewMessage {}
 
 impl Message for ViewMessage {}
 
-pub enum ViewControlMessage {}
+#[non_exhaustive]
+pub enum ViewControlMessage {
+    Stop,
+}
 
 impl Message for ViewControlMessage {}
 
 pub trait View:
     Component<Message = ViewMessage, ControlMessage = ViewControlMessage> + Runnable
 {
+}
+
+crate::impl_control_message_handler! {
+    @component View;
+    @message ViewMessage;
+    @control_message ViewControlMessage;
 }

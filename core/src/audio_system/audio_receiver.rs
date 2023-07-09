@@ -11,6 +11,6 @@ pub struct AudioRawData;
 
 impl Message for AudioRawData {}
 
-pub trait AudioReceiver: AudioSource<Out = AudioRawData> {
+pub trait AudioReceiver: AudioSource<AudioRawData> {
     fn info(&self) -> AudioReceiverInfo;
 }

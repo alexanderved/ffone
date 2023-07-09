@@ -6,6 +6,6 @@ pub struct VirtualMicrophoneInfo {
     name: String,
 }
 
-pub trait VirtualMicrophone: AudioSink<In = AudioRawData> {
+pub trait VirtualMicrophone: AudioSink<AudioRawData> {
     fn info(&self) -> VirtualMicrophoneInfo;
 }

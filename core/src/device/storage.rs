@@ -1,11 +1,13 @@
 use super::link::DeviceLink;
 
-use crate::util::{Component, ControlFlow, Runnable};
+use crate::error;
+use crate::util::*;
 
 use mueue::*;
 
 pub enum DeviceLinkStorageMessage {
     Device(Box<dyn DeviceLink>),
+    NoDevice(error::Error),
 }
 
 impl Message for DeviceLinkStorageMessage {}
@@ -13,6 +15,8 @@ impl Message for DeviceLinkStorageMessage {}
 pub enum DeviceLinkStorageControlMessage {
     Store(Box<dyn DeviceLink>),
     Load,
+
+    Stop,
 }
 
 impl Message for DeviceLinkStorageControlMessage {}
@@ -24,12 +28,21 @@ pub struct DeviceLinkStorage {
 }
 
 impl DeviceLinkStorage {
-    pub fn store(&mut self, link: Box<dyn DeviceLink>) {
+    pub fn store(&mut self, mut link: Box<dyn DeviceLink>) {
+        self.link_control_flow = ControlFlow::Continue;
+        let _ = link.on_start();
+
         self.link = Some(link);
     }
 
-    pub fn load(&mut self) -> Option<Box<dyn DeviceLink>> {
-        self.link.take()
+    pub fn load(&mut self) -> error::Result<Box<dyn DeviceLink>> {
+        self.link
+            .take()
+            .map(|mut link| {
+                let _ = link.on_stop();
+                link
+            })
+            .ok_or(error::Error::NoDevice)
     }
 }
 
@@ -47,22 +60,26 @@ impl Component for DeviceLinkStorage {
 }
 
 impl Runnable for DeviceLinkStorage {
-    fn update(&mut self, _flow: &mut ControlFlow) {
+    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
         self.link.as_mut().map(|link| {
             if matches!(self.link_control_flow, ControlFlow::Continue) {
-                link.update(&mut self.link_control_flow);
+                let _ = link.update(&mut self.link_control_flow);
             }
         });
 
         self.endpoint()
             .iter()
-            .for_each(|msg| match msg {
-                DeviceLinkStorageControlMessage::Store(link) => self.store(link),
-                DeviceLinkStorageControlMessage::Load => {
-                    self.load().map(|link| {
-                        self.send(DeviceLinkStorageMessage::Device(link));
-                    });
-                }
-            });
+            .for_each(|msg| msg.handle(self, &mut *flow));
+
+        Ok(())
     }
+}
+
+crate::impl_control_message_handler! {
+    @concrete_component DeviceLinkStorage;
+    @message DeviceLinkStorageMessage;
+    @control_message DeviceLinkStorageControlMessage;
+
+    Store(link) => store;
+    Load => load => @map_or_else(NoDevice, Device);
 }

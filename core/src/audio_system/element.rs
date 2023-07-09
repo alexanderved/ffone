@@ -7,7 +7,7 @@ pub enum AudioSystemNotification {}
 
 impl Message for AudioSystemNotification {}
 
-pub trait AudioSystemElement: Runnable + Send + Sync {
+pub trait AudioSystemElement: Runnable + Send {
     fn notification_sender(&self) -> MessageSender<AudioSystemNotification>;
     fn connect(&mut self, send: MessageSender<AudioSystemNotification>);
 
@@ -18,10 +18,10 @@ pub trait AudioSystemElement: Runnable + Send + Sync {
 
 impl_as_trait!(audio_system_element -> AudioSystemElement);
 
-pub trait AudioSource: AudioSystemElement + AsAudioSource {
-    fn set_output(&mut self, output: MessageSender<Self::Out>);
+pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
+    fn set_output(&mut self, output: MessageSender<Out>);
 
-    fn chain(&mut self, sink: &mut dyn AudioSink<In = Self::Out>) {
+    fn chain(&mut self, sink: &mut dyn AudioSink<Out>) {
         let (output, input) = unidirectional_queue();
 
         self.set_output(output);
@@ -29,64 +29,10 @@ pub trait AudioSource: AudioSystemElement + AsAudioSource {
     }
 }
 
-pub trait AsAudioSource {
-    type Out: Message;
+impl_as_trait!(audio_source -> AudioSource<Out: Message>);
 
-    fn as_audio_source(&self) -> &dyn AudioSource<Out = Self::Out>;
-    fn as_audio_source_mut(&mut self) -> &mut dyn AudioSource<Out = Self::Out>;
-    fn as_audio_source_box(self: Box<Self>) -> Box<dyn AudioSource<Out = Self::Out>>
-    where
-        Self: 'static;
+pub trait AudioSink<In: Message>: AudioSystemElement + AsAudioSink<In> {
+    fn set_input(&mut self, input: MessageReceiver<In>);
 }
 
-impl<T: AudioSource> AsAudioSource for T {
-    type Out = T::Out;
-
-    fn as_audio_source(&self) -> &dyn AudioSource<Out = Self::Out> {
-        self
-    }
-
-    fn as_audio_source_mut(&mut self) -> &mut dyn AudioSource<Out = Self::Out> {
-        self
-    }
-
-    fn as_audio_source_box(self: Box<Self>) -> Box<dyn AudioSource<Out = Self::Out>>
-    where
-        Self: 'static,
-    {
-        self
-    }
-}
-
-pub trait AudioSink: AudioSystemElement + AsAudioSink {
-    fn set_input(&mut self, input: MessageReceiver<Self::In>);
-}
-
-pub trait AsAudioSink {
-    type In: Message;
-
-    fn as_audio_sink(&self) -> &dyn AudioSink<In = Self::In>;
-    fn as_audio_sink_mut(&mut self) -> &mut dyn AudioSink<In = Self::In>;
-    fn as_audio_sink_box(self: Box<Self>) -> Box<dyn AudioSink<In = Self::In>>
-    where
-        Self: 'static;
-}
-
-impl<T: AudioSink> AsAudioSink for T {
-    type In = T::In;
-
-    fn as_audio_sink(&self) -> &dyn AudioSink<In = Self::In> {
-        self
-    }
-
-    fn as_audio_sink_mut(&mut self) -> &mut dyn AudioSink<In = Self::In> {
-        self
-    }
-
-    fn as_audio_sink_box(self: Box<Self>) -> Box<dyn AudioSink<In = Self::In>>
-    where
-        Self: 'static,
-    {
-        self
-    }
-}
+impl_as_trait!(audio_sink -> AudioSink<In: Message>);

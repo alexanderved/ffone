@@ -2,7 +2,7 @@ pub mod discoverer;
 pub mod link;
 pub mod storage;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct DeviceInfo {
     pub name: String,
 }
@@ -13,4 +13,11 @@ impl DeviceInfo {
             name: String::from(name),
         }
     }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
+pub enum DeviceCommand {
+    GetInfo,
+    GetAudioTransmissionPort,
 }
