@@ -1,45 +1,45 @@
-use crate::network::*;
+use crate::connection::TcpConnection;
 
 use super::*;
 
 use core::device::link::*;
 use core::device::*;
 use core::error;
-use core::util::{Component, ControlFlow, Runnable};
+use core::util::{Component, ControlFlow, Runnable, Timer};
 
 use core::mueue::*;
 
-use std::net::TcpStream;
+use std::time::Duration;
 
 pub struct LanLink {
     end: Option<DeviceLinkEndpoint>,
     info: LanDeviceInfo,
 
-    link: TcpStream,
+    link: TcpConnection,
+    check_connection_timer: Timer,
 }
 
 impl LanLink {
     pub fn new(info: LanDeviceInfo) -> error::Result<Self> {
-        let link = TcpStream::connect(info.addr)?;
-        link.set_nodelay(true)?;
+        let link = TcpConnection::new(info.addr)?;
 
         Ok(Self {
             end: None,
             info: info.clone(),
 
             link,
+            check_connection_timer: Timer::new(Duration::from_secs(1)),
         })
     }
 
-    pub fn get_from_device<U>(&self, cmd: DeviceCommand) -> error::Result<U>
+    pub fn get_from_device<U>(&mut self, cmd: DeviceCommand) -> error::Result<U>
     where
-        U: for<'de> serde::Deserialize<'de>,
+        U: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
     {
-        let packet = NetworkPacket::serialize(&cmd)?;
-        packet.send(&self.link)?;
+        self.link.send(&cmd)?;
+        let res = self.link.recv()?;
 
-        let packet = NetworkPacket::recv(&self.link)?;
-        Ok(packet.deserialize()?)
+        Ok(res)
     }
 }
 
@@ -58,20 +58,16 @@ impl Component for LanLink {
 
 impl Runnable for LanLink {
     fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
-        if is_tcp_socket_disconnected(&self.link) {
-            self.send(DeviceLinkMessage::DeviceDisconnected);
-            *flow = ControlFlow::Break;
-
-            //return Ok(());
-        }
-        //panic!("");
+        self.check_connection_timer.on_timeout(|| {
+            if !self.link.is_open() {
+                *flow = ControlFlow::Break;
+                self.send(DeviceLinkMessage::DeviceDisconnected);
+            }
+        });
 
         self.endpoint()
             .iter()
-            .for_each(|msg| {
-                dbg!(&msg);
-                msg.handle(self, &mut *flow);
-            });
+            .for_each(|msg| msg.handle(self, &mut *flow));
 
         Ok(())
     }
@@ -82,42 +78,18 @@ impl DeviceLink for LanLink {
         self.info.info()
     }
 
-    fn audio_address(&self) -> error::Result<SocketAddr> {
-        let ip = self.link.peer_addr()?.ip();
+    fn audio_address(&mut self) -> error::Result<SocketAddr> {
+        let ip = self.link.socket().peer_addr()?.ip();
         let port = self.get_from_device::<u16>(DeviceCommand::GetAudioTransmissionPort)?;
 
         Ok(SocketAddr::from((ip, port)))
     }
 }
 
-fn is_tcp_socket_disconnected(socket: &TcpStream) -> bool {
-    use std::io;
-
-    let res: Result<_, io::Error> = core::try_block! {
-        let mut buf = [0; 16];
-        socket.set_nonblocking(true)?;
-        let n = socket.peek(&mut buf)?;
-        socket.set_nonblocking(false)?;
-
-        Ok(n)
-    };
-
-    //panic!("{:?}", &res);
-    dbg!(&res);
-    
-    match res {
-        Ok(0) => true,
-        Err(err) if err.kind() == io::ErrorKind::ConnectionAborted => true,
-        Err(err) if err.kind() == io::ErrorKind::ConnectionReset => true,
-        Err(err) if err.kind() == io::ErrorKind::BrokenPipe => true,
-        Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => true,
-        _ => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::network::*;
 
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::thread::{self, JoinHandle};
@@ -167,9 +139,9 @@ mod tests {
                 return Ok(());
             }
 
-            let link = self.link.as_ref().expect("A link wasn't obtained");
+            let mut link = self.link.as_ref().expect("A link wasn't obtained");
 
-            let packet = NetworkPacket::recv(&link)?;
+            let packet = link.recv_packet()?;
             let msg = packet.deserialize()?;
 
             let packet = match msg {
@@ -179,7 +151,8 @@ mod tests {
                 }
                 _ => return Ok(()),
             };
-            packet.send(&link)?;
+
+            link.send_packet(&packet)?;
 
             Ok(())
         }
@@ -243,7 +216,7 @@ mod tests {
         link_handle.join().unwrap();
     }
 
-    //#[test]
+    #[test]
     fn test_get_info() -> error::Result<()> {
         let device_port = 31707;
         let (device_send, device_handle) = run_device("fake", device_port)?;
@@ -265,14 +238,15 @@ mod tests {
         Ok(())
     }
 
-    //#[test]
-    fn test_get_audio_transmission_address() -> error::Result<()> {
+    #[test]
+    fn test_get_audio_address() -> error::Result<()> {
         let device_port = 31708;
         let (device_send, device_handle) = run_device("fake", device_port)?;
         let (link_end, link_handle) = run_link(device_port)?;
 
         let _ = link_end.send(DeviceLinkControlMessage::GetAudioAddress);
-        /* let addr = 'outer: loop {
+
+        let addr = 'outer: loop {
             for msg in link_end.iter() {
                 if let DeviceLinkMessage::AudioAddress(addr) = msg {
                     break 'outer addr;
@@ -282,7 +256,7 @@ mod tests {
         assert_eq!(
             addr,
             SocketAddr::from((Ipv4Addr::LOCALHOST, FakeDevice::AUDIO_PORT))
-        ); */
+        );
 
         stop_device((device_send, device_handle));
         stop_link((link_end, link_handle));

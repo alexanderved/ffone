@@ -47,5 +47,5 @@ crate::impl_control_message_handler! {
     @control_message DeviceDiscovererControlMessage;
 
     EnumerateDevices => enumerate_devices => DevicesEnumerated;
-    OpenLink(info) => open_link => @map_or_else(OpenLinkError, LinkOpened);
+    OpenLink(info) => open_link => @ok LinkOpened, @err OpenLinkError;
 }

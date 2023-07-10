@@ -4,6 +4,78 @@ mod runnable;
 pub use component::*;
 pub use runnable::*;
 
+use std::time::*;
+use std::cell::Cell;
+
+pub struct Timer {
+    start: Cell<Instant>,
+    timeout: Duration,
+}
+
+impl Timer {
+    pub fn new(timeout: Duration) -> Self {
+        Self {
+            start: Cell::new(Instant::now()),
+            timeout,
+        }
+    }
+
+    pub fn on_timeout(&self, f: impl FnOnce()) {
+        if self.start.get().elapsed() > self.timeout {
+            f();
+            self.start.set(Instant::now());
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! try_block {
+    (
+        $( $block:tt )*
+    ) => {
+        (|| {
+            $( $block )*
+        })()
+    };
+}
+
+#[macro_export]
+macro_rules! guard {
+    (
+        @guard $guard:ident $(< $( $generics:tt $(: $bound:tt $(+ $bounds:tt)* )? ),+ >)? {
+            $( $field:ident : $field_ty:ty, )*
+        }
+        @new -> $ret:ty $( where $wrapper:ident (Self))? $new_block:block
+        @drop $drop_block:block
+        $( @unwrap_with $( $unwrap_op:tt )* )?
+    ) => {
+        struct $guard $(< $( $generics $(: $bound $(+ $bounds)* )? ),+ >)? {
+            $( $field : $field_ty, )*
+        }
+
+        impl $(< $( $generics $(: $bound $(+ $bounds)* )? ),+ >)? $guard $(< $( $generics ),+ >)? {
+            fn new($( mut $field : $field_ty, )*) -> $ret {
+                $new_block;
+
+                $( $wrapper )? (Self {
+                    $( $field, )*
+                })
+            }
+        }
+
+        impl $(< $( $generics $(: $bound $(+ $bounds)* )? ),+ >)? ::std::ops::Drop for
+            $guard $(< $( $generics ),+ >)?
+        {
+            fn drop(&mut self) {
+                let Self { $( $field, )* } = self;
+                $drop_block;
+            }
+        }
+
+        let _guard = $guard::new( $( $field, )* ) $( $( $unwrap_op )* )?;
+    };
+}
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_as_trait {
@@ -61,8 +133,7 @@ macro_rules! impl_control_message_handler {
             => $method:ident
             $( =>
                 $( $res:ident )?
-                $( @map($map_ok:ident) )?
-                $( @map_or_else($err:ident, $ok:ident) )?
+                $( @ok $ok:ident $(, @err $err:expr )? $(, @err_ctrl $err_ctrl:expr )? )?
             )?;
         )*
     ) => {
@@ -75,6 +146,9 @@ macro_rules! impl_control_message_handler {
                 handler: $( &mut impl $comp )? $( &mut $ccomp )? $(< $( $cgenerics ),+ >)?,
                 control_flow: &mut $crate::util::ControlFlow,
             ) {
+                type __Handler = $( dyn $comp )? $( $ccomp )?
+                    $(< $( $cgenerics $(: $cbound $(+ $cbounds)* )? ),+ >)?;
+                use $msg::*;
                 match self {
                     $(
                         $cmsg::$op $(( $( $ufields ),* ))? $({ $( $nfields ),* })? => {
@@ -88,14 +162,15 @@ macro_rules! impl_control_message_handler {
                                 )?
 
                                 $(
-                                    op_res.map(|op_res| {
-                                        handler.send($msg::$map_ok(op_res));
-                                    });
-                                )?
-
-                                $(
                                     let msg = op_res.map_or_else(
-                                        $msg::$err,
+                                        $( $err, )?
+                                        $(
+                                            |err| $err_ctrl(
+                                                &mut *handler,
+                                                &mut *control_flow,
+                                                err,
+                                            ),
+                                        )?
                                         $msg::$ok,
                                     );
                                     handler.send(msg);
@@ -110,16 +185,5 @@ macro_rules! impl_control_message_handler {
                 }
             }
         }
-    };
-}
-
-#[macro_export]
-macro_rules! try_block {
-    (
-        $( $block:tt )*
-    ) => {
-        (|| {
-            $( $block )*
-        })()
     };
 }

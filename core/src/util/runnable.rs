@@ -93,10 +93,11 @@ impl<R: Runnable> RunnableStateMachine<R> {
 
     pub fn stop(&mut self) -> error::Result<()> {
         self.control_flow = ControlFlow::Break;
-        self.runnable
-            .as_mut()
-            .expect("No runnable was found")
-            .on_stop()?;
+        
+        let Some(runnable) = self.runnable.as_mut() else {
+            return Ok(());
+        };
+        runnable.on_stop()?;
 
         Ok(())
     }

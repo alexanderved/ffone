@@ -81,5 +81,5 @@ crate::impl_control_message_handler! {
     @control_message DeviceLinkStorageControlMessage;
 
     Store(link) => store;
-    Load => load => @map_or_else(NoDevice, Device);
+    Load => load => @ok Device, @err NoDevice;
 }

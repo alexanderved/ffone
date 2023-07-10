@@ -1,4 +1,5 @@
 mod broadcast;
+mod connection;
 pub mod discoverer;
 pub mod link;
 mod network;

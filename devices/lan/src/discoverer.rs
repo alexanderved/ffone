@@ -19,7 +19,7 @@ pub struct LanDiscoverer {
     end: Option<DeviceDiscovererEndpoint>,
     infos: HashMap<DeviceInfo, LanDeviceInfo>,
 
-    broadcast: BroadcastListener,
+    broadcast: UdpBroadcastListener,
 }
 
 impl LanDiscoverer {
@@ -28,7 +28,7 @@ impl LanDiscoverer {
             end: None,
             infos: HashMap::new(),
 
-            broadcast: BroadcastListener::new(BROADCAST_PORT)?,
+            broadcast: UdpBroadcastListener::new(BROADCAST_PORT)?,
         })
     }
 
@@ -147,9 +147,9 @@ mod tests {
             };
             let data = NetworkPacket::serialize(&identity_packet)?;
 
-            let _ = self.broadcast_socket.send_to(
-                data.as_ref(),
+            let _ = self.broadcast_socket.send_packet_to(
                 SocketAddr::from((Ipv4Addr::BROADCAST, BROADCAST_PORT)),
+                &data,
             );
 
             Ok(())

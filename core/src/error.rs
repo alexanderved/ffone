@@ -13,6 +13,8 @@ pub enum Error {
     WrongNetworkPacketHeader,
     #[error("No device was found")]
     NoDevice,
+    #[error("The device has disconnected")]
+    DeviceDisconnected,
     #[error("Other error occured: {0}")]
     Other(String),
 }

@@ -10,7 +10,7 @@ use std::time::Duration;
 use mio::net::UdpSocket;
 use mio::{Events, Interest, Poll, Token};
 
-const IDENTITY_RECEIVED: Token = Token(1);
+const IDENTITY_RECEIVABLE: Token = Token(1);
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(super) struct IdentityPacket {
@@ -29,19 +29,19 @@ impl From<(IdentityPacket, IpAddr)> for LanDeviceInfo {
     }
 }
 
-pub(super) struct BroadcastListener {
+pub(super) struct UdpBroadcastListener {
     socket: UdpSocket,
     poll: Poll,
     events: Events,
 }
 
-impl BroadcastListener {
+impl UdpBroadcastListener {
     pub(super) fn new(port: u16) -> error::Result<Self> {
         let mut socket = UdpSocket::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)))?;
 
         let poll = Poll::new()?;
         poll.registry()
-            .register(&mut socket, IDENTITY_RECEIVED, Interest::READABLE)?;
+            .register(&mut socket, IDENTITY_RECEIVABLE, Interest::READABLE)?;
 
         let events = Events::with_capacity(128);
 
@@ -58,11 +58,11 @@ impl BroadcastListener {
             .poll(&mut self.events, Some(Duration::from_micros(0)))?;
 
         for e in self.events.iter() {
-            if e.token() != IDENTITY_RECEIVED {
+            if e.token() != IDENTITY_RECEIVABLE {
                 continue;
             }
 
-            while NetworkPacket::is_pending_from(&self.socket) {
+            while self.socket.has_pending_packet_from() {
                 let Ok(lan_info) = recv_device_info(&self.socket) else {
                     continue;
                 };
@@ -76,7 +76,7 @@ impl BroadcastListener {
 }
 
 fn recv_device_info(socket: &UdpSocket) -> error::Result<LanDeviceInfo> {
-    let (packet, sender_addr) = NetworkPacket::recv_from(socket)?;
+    let (packet, sender_addr) = socket.recv_packet_from()?;
 
     let identity = packet.deserialize::<IdentityPacket>()?;
     let info = LanDeviceInfo::from((identity, sender_addr.ip()));

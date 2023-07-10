@@ -37,10 +37,9 @@ pub trait DeviceLink:
     Component<Message = DeviceLinkMessage, ControlMessage = DeviceLinkControlMessage>
     + Runnable
     + Send
-    + Sync
 {
     fn info(&self) -> DeviceInfo;
-    fn audio_address(&self) -> error::Result<SocketAddr>;
+    fn audio_address(&mut self) -> error::Result<SocketAddr>;
 }
 
 crate::impl_control_message_handler! {
@@ -49,5 +48,5 @@ crate::impl_control_message_handler! {
     @control_message DeviceLinkControlMessage;
 
     GetInfo => info => Info;
-    GetAudioAddress => audio_address => @map_or_else(GetAudioAddressError, AudioAddress);
+    GetAudioAddress => audio_address => @ok AudioAddress, @err GetAudioAddressError;
 }
