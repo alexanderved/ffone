@@ -1,6 +1,8 @@
 use crate::util::*;
 
-use mueue::Message;
+use mueue::{Message, MessageEndpoint};
+
+pub type ViewEndpoint = MessageEndpoint<ViewControlMessage, ViewMessage>;
 
 #[non_exhaustive]
 pub enum ViewMessage {}

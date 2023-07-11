@@ -19,5 +19,5 @@ impl DeviceInfo {
 #[non_exhaustive]
 pub enum DeviceCommand {
     GetInfo,
-    GetAudioTransmissionPort,
+    GetAudioPort,
 }

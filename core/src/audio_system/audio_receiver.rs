@@ -1,6 +1,8 @@
+use super::element::*;
+use crate::util::RunnableStateMachine;
 use mueue::Message;
 
-use super::element::*;
+pub type AudioReceiverStateMachine = RunnableStateMachine<Box<dyn AudioReceiver>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AudioReceiverInfo {

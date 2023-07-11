@@ -80,7 +80,7 @@ impl DeviceLink for LanLink {
 
     fn audio_address(&mut self) -> error::Result<SocketAddr> {
         let ip = self.link.socket().peer_addr()?.ip();
-        let port = self.get_from_device::<u16>(DeviceCommand::GetAudioTransmissionPort)?;
+        let port = self.get_from_device::<u16>(DeviceCommand::GetAudioPort)?;
 
         Ok(SocketAddr::from((ip, port)))
     }
@@ -146,7 +146,7 @@ mod tests {
 
             let packet = match msg {
                 DeviceCommand::GetInfo => NetworkPacket::serialize(&self.info())?,
-                DeviceCommand::GetAudioTransmissionPort => {
+                DeviceCommand::GetAudioPort => {
                     NetworkPacket::serialize(&self.audio_port())?
                 }
                 _ => return Ok(()),

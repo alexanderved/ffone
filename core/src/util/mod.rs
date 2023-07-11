@@ -4,8 +4,8 @@ mod runnable;
 pub use component::*;
 pub use runnable::*;
 
-use std::time::*;
 use std::cell::Cell;
+use std::time::*;
 
 pub struct Timer {
     start: Cell<Instant>,

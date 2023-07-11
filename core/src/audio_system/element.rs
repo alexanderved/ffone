@@ -18,6 +18,13 @@ pub trait AudioSystemElement: Runnable + Send {
 
 impl_as_trait!(audio_system_element -> AudioSystemElement);
 
+pub trait AudioSystemElementBuilder {
+    type Element: AudioSystemElement + ?Sized;
+
+    fn set_notification_sender(&mut self, send: MessageSender<AudioSystemNotification>);
+    fn build(self: Box<Self>) -> Box<Self::Element>;
+}
+
 pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
     fn set_output(&mut self, output: MessageSender<Out>);
 

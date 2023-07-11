@@ -11,3 +11,16 @@ pub trait Component {
         let _ = self.endpoint().send(msg);
     }
 }
+
+pub trait ComponentBuilder {
+    type Component: Component + ?Sized;
+
+    fn set_endpoint(
+        &mut self,
+        end: MessageEndpoint<
+            <Self::Component as Component>::ControlMessage,
+            <Self::Component as Component>::Message,
+        >,
+    );
+    fn build(self: Box<Self>) -> Box<Self::Component>;
+}
