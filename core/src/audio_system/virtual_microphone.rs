@@ -12,3 +12,8 @@ pub struct VirtualMicrophoneInfo {
 pub trait VirtualMicrophone: AudioSink<AudioRawData> {
     fn info(&self) -> VirtualMicrophoneInfo;
 }
+
+pub trait VirtualMicrophoneBuilder:
+    AudioSystemElementBuilder<Element = dyn VirtualMicrophone>
+{
+}

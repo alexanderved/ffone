@@ -1,3 +1,5 @@
+use crate::error;
+
 use mueue::*;
 
 pub trait Component {
@@ -22,5 +24,5 @@ pub trait ComponentBuilder {
             <Self::Component as Component>::Message,
         >,
     );
-    fn build(self: Box<Self>) -> Box<Self::Component>;
+    fn build(self: Box<Self>) -> error::Result<Box<Self::Component>>;
 }

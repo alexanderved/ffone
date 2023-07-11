@@ -36,7 +36,7 @@ pub enum AudioSystemControlMessage {
 impl Message for AudioSystemControlMessage {}
 
 pub struct AudioSystem {
-    endpoint: Option<AudioSystemEndpoint>,
+    endpoint: AudioSystemEndpoint,
     notification_receiver: MessageReceiver<AudioSystemNotification>,
 
     active_audio_receiver: Option<AudioReceiverStateMachine>,
@@ -48,19 +48,19 @@ pub struct AudioSystem {
 
 impl AudioSystem {
     pub fn new(
-        audio_receivers: Vec<Box<dyn AudioReceiver>>,
-        virtual_mics: Vec<Box<dyn VirtualMicrophone>>,
+        end: AudioSystemEndpoint,
+        audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+        virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
     ) -> Self {
         let (notification_sender, notification_receiver) = unidirectional_queue();
 
-        let mut audio_receivers = collect_audio_receivers_map(audio_receivers);
-        connect_audio_receivers(&mut audio_receivers, notification_sender.clone());
-
-        let mut virtual_mics = collect_virtual_microphones_map(virtual_mics);
-        connect_virtual_microphones(&mut virtual_mics, notification_sender);
+        let audio_receivers =
+            collect_audio_receivers(audio_receivers_builders, notification_sender.clone());
+        let virtual_mics =
+            collect_virtual_microphones(virtual_mics_builders, notification_sender.clone());
 
         Self {
-            endpoint: None,
+            endpoint: end,
             notification_receiver,
 
             active_audio_receiver: None,
@@ -72,40 +72,34 @@ impl AudioSystem {
     }
 }
 
-fn collect_audio_receivers_map(
-    mut audio_receivers: Vec<Box<dyn AudioReceiver>>,
+fn collect_audio_receivers(
+    mut audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+    notification_sender: MessageSender<AudioSystemNotification>,
 ) -> HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>> {
-    audio_receivers
+    audio_receivers_builders
         .drain(..)
+        .map(|mut builder| {
+            builder.set_notification_sender(notification_sender.clone());
+            builder
+        })
+        .filter_map(|builder| builder.build().ok())
         .map(|audio_recv| (audio_recv.info(), audio_recv))
         .collect()
 }
 
-fn connect_audio_receivers(
-    audio_receivers: &mut HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
+fn collect_virtual_microphones(
+    mut virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
     notification_sender: MessageSender<AudioSystemNotification>,
-) {
-    audio_receivers
-        .values_mut()
-        .for_each(|audio_recv| audio_recv.connect(notification_sender.clone()));
-}
-
-fn collect_virtual_microphones_map(
-    mut virtual_mics: Vec<Box<dyn VirtualMicrophone>>,
 ) -> HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>> {
-    virtual_mics
+    virtual_mics_builders
         .drain(..)
+        .map(|mut builder| {
+            builder.set_notification_sender(notification_sender.clone());
+            builder
+        })
+        .filter_map(|builder| builder.build().ok())
         .map(|virtual_mic| (virtual_mic.info(), virtual_mic))
         .collect()
-}
-
-fn connect_virtual_microphones(
-    virtual_mics: &mut HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
-    notification_sender: MessageSender<AudioSystemNotification>,
-) {
-    virtual_mics
-        .values_mut()
-        .for_each(|virtual_mic| virtual_mic.connect(notification_sender.clone()));
 }
 
 impl Component for AudioSystem {
@@ -113,13 +107,11 @@ impl Component for AudioSystem {
     type ControlMessage = AudioSystemControlMessage;
 
     fn endpoint(&self) -> MessageEndpoint<Self::ControlMessage, Self::Message> {
-        self.endpoint
-            .clone()
-            .expect("A message endpoint wasn't set")
+        self.endpoint.clone()
     }
 
     fn connect(&mut self, end: MessageEndpoint<Self::ControlMessage, Self::Message>) {
-        self.endpoint = Some(end);
+        self.endpoint = end;
     }
 }
 
@@ -191,8 +183,56 @@ fn choose_best_virtual_microphone(
     active_virtual_mic.expect("No suitable audio receivers were provided")
 }
 
-/* pub struct AudioSystemBuilder {
+pub struct AudioSystemBuilder {
     end: Option<AudioSystemEndpoint>,
-    audio_receivers_builders: Vec<Box<dyn AudioSystemElementBuilder<Element = dyn AudioReceiver>>>,
-    virtual_mics_builders: Vec<Box<dyn AudioSystemElementBuilder<Element = dyn VirtualMicrophone>>>,
-} */
+
+    audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+    virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
+}
+
+impl AudioSystemBuilder {
+    pub fn new() -> Self {
+        Self {
+            end: None,
+
+            audio_receivers_builders: vec![],
+            virtual_mics_builders: vec![],
+        }
+    }
+
+    pub fn add_audio_receiver<B: AudioReceiverBuilder + 'static>(mut self, builder: B) -> Self {
+        self.audio_receivers_builders.push(Box::new(builder));
+        self
+    }
+
+    pub fn add_virtual_microphone<B: VirtualMicrophoneBuilder + 'static>(
+        mut self,
+        builder: B,
+    ) -> Self {
+        self.virtual_mics_builders.push(Box::new(builder));
+        self
+    }
+}
+
+impl ComponentBuilder for AudioSystemBuilder {
+    type Component = AudioSystem;
+
+    fn set_endpoint(&mut self, end: AudioSystemEndpoint) {
+        self.end = Some(end);
+    }
+
+    fn build(self: Box<Self>) -> error::Result<Box<Self::Component>> {
+        let Self {
+            end,
+            audio_receivers_builders,
+            virtual_mics_builders,
+        } = *self;
+        let end = end.expect("An audio system endpoint wasn't provided");
+
+        Ok(Box::new(AudioSystem::new(
+            end,
+            audio_receivers_builders,
+            virtual_mics_builders,
+        )))
+    }
+}

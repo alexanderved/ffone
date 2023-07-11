@@ -22,7 +22,7 @@ pub trait AudioSystemElementBuilder {
     type Element: AudioSystemElement + ?Sized;
 
     fn set_notification_sender(&mut self, send: MessageSender<AudioSystemNotification>);
-    fn build(self: Box<Self>) -> Box<Self::Element>;
+    fn build(self: Box<Self>) -> error::Result<Box<Self::Element>>;
 }
 
 pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {

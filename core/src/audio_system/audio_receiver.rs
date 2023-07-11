@@ -16,3 +16,5 @@ impl Message for AudioRawData {}
 pub trait AudioReceiver: AudioSource<AudioRawData> {
     fn info(&self) -> AudioReceiverInfo;
 }
+
+pub trait AudioReceiverBuilder: AudioSystemElementBuilder<Element = dyn AudioReceiver> {}
