@@ -79,7 +79,7 @@ fn collect_audio_receivers(
     audio_receivers_builders
         .drain(..)
         .map(|mut builder| {
-            builder.set_notification_sender(notification_sender.clone());
+            builder.set_sender(notification_sender.clone());
             builder
         })
         .filter_map(|builder| builder.build().ok())
@@ -94,7 +94,7 @@ fn collect_virtual_microphones(
     virtual_mics_builders
         .drain(..)
         .map(|mut builder| {
-            builder.set_notification_sender(notification_sender.clone());
+            builder.set_sender(notification_sender.clone());
             builder
         })
         .filter_map(|builder| builder.build().ok())

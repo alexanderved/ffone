@@ -13,7 +13,5 @@ pub trait VirtualMicrophone: AudioSink<AudioRawData> {
     fn info(&self) -> VirtualMicrophoneInfo;
 }
 
-pub trait VirtualMicrophoneBuilder:
-    AudioSystemElementBuilder<Element = dyn VirtualMicrophone>
-{
-}
+crate::trait_alias!(pub VirtualMicrophoneBuilder:
+    AudioSystemElementBuilder<Element = dyn VirtualMicrophone>);

@@ -17,4 +17,5 @@ pub trait AudioReceiver: AudioSource<AudioRawData> {
     fn info(&self) -> AudioReceiverInfo;
 }
 
-pub trait AudioReceiverBuilder: AudioSystemElementBuilder<Element = dyn AudioReceiver> {}
+crate::trait_alias!(pub AudioReceiverBuilder:
+    AudioSystemElementBuilder<Element = dyn AudioReceiver>);

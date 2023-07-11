@@ -1,7 +1,9 @@
 mod component;
+mod element;
 mod runnable;
 
 pub use component::*;
+pub use element::*;
 pub use runnable::*;
 
 use std::cell::Cell;
@@ -114,6 +116,16 @@ macro_rules! impl_as_trait {
                 }
             }
         }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! trait_alias {
+    ($vis:vis $alias:ident : $( $trait:tt )*) => {
+        $vis trait $alias: $( $trait )* {}
+
+        impl<T: $( $trait )* + ?Sized> $alias for T {}
     };
 }
 

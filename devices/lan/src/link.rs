@@ -146,9 +146,7 @@ mod tests {
 
             let packet = match msg {
                 DeviceCommand::GetInfo => NetworkPacket::serialize(&self.info())?,
-                DeviceCommand::GetAudioPort => {
-                    NetworkPacket::serialize(&self.audio_port())?
-                }
+                DeviceCommand::GetAudioPort => NetworkPacket::serialize(&self.audio_port())?,
                 _ => return Ok(()),
             };
 

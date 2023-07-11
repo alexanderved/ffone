@@ -1,29 +1,25 @@
-use super::*;
+use crate::util::*;
 use crate::*;
 
 use mueue::*;
 
+#[non_exhaustive]
 pub enum AudioSystemNotification {}
 
 impl Message for AudioSystemNotification {}
 
-pub trait AudioSystemElement: Runnable + Send {
-    fn notification_sender(&self) -> MessageSender<AudioSystemNotification>;
-    fn connect(&mut self, send: MessageSender<AudioSystemNotification>);
-
-    fn send(&self, msg: AudioSystemNotification) {
-        let _ = self.notification_sender().send(msg);
-    }
-}
+trait_alias!(pub AudioSystemElement:
+    Element<Notiication = AudioSystemNotification> + Runnable + AsAudioSystemElement);
 
 impl_as_trait!(audio_system_element -> AudioSystemElement);
 
-pub trait AudioSystemElementBuilder {
-    type Element: AudioSystemElement + ?Sized;
-
-    fn set_notification_sender(&mut self, send: MessageSender<AudioSystemNotification>);
-    fn build(self: Box<Self>) -> error::Result<Box<Self::Element>>;
+pub trait AudioSystemElementBuilder: ElementBuilder
+where
+    Self::Element: AudioSystemElement,
+{
 }
+
+impl<B: ElementBuilder> AudioSystemElementBuilder for B where Self::Element: AudioSystemElement {}
 
 pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
     fn set_output(&mut self, output: MessageSender<Out>);
