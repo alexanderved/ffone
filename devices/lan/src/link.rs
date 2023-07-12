@@ -198,9 +198,9 @@ mod tests {
             link.send_packet(&NetworkPacket::serialize(&DeviceMessage::Info {
                 info: self.info(),
             })?)?;
-            /* link.send_packet(&NetworkPacket::serialize(&DeviceMessage::AudioPort {
+            link.send_packet(&NetworkPacket::serialize(&DeviceMessage::AudioPort {
                 port: self.audio_port(),
-            })?)?; */
+            })?)?;
 
             self.link = Some(link);
 
@@ -264,8 +264,6 @@ mod tests {
         let (device_send, device_handle) = run_device("fake", device_port)?;
         let mut link = create_link(device_port)?;
 
-        stop_device((device_send, device_handle));
-
         let mut addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0));
         while let Some(_) = link.proceed() {
             if let Some(address) = link.as_runnable_mut().audio_address() {
@@ -279,6 +277,8 @@ mod tests {
             addr,
             SocketAddr::from((Ipv4Addr::LOCALHOST, FakeDevice::AUDIO_PORT))
         );
+
+        stop_device((device_send, device_handle));
 
         Ok(())
     }
