@@ -4,12 +4,14 @@ use crate::*;
 use mueue::*;
 
 #[non_exhaustive]
-pub enum AudioSystemNotification {}
+pub enum AudioSystemElementMessage {
+    Error(error::Error),
+}
 
-impl Message for AudioSystemNotification {}
+impl Message for AudioSystemElementMessage {}
 
 trait_alias!(pub AudioSystemElement:
-    Element<Notiication = AudioSystemNotification> + Runnable + AsAudioSystemElement);
+    Element<Message = AudioSystemElementMessage> + Runnable + AsAudioSystemElement);
 
 impl_as_trait!(audio_system_element -> AudioSystemElement);
 

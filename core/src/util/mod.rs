@@ -10,23 +10,37 @@ use std::cell::Cell;
 use std::time::*;
 
 pub struct Timer {
-    start: Cell<Instant>,
-    timeout: Duration,
+    pub start: Cell<Instant>,
+    interval: Duration,
 }
 
 impl Timer {
-    pub fn new(timeout: Duration) -> Self {
+    pub fn new(interval: Duration) -> Self {
         Self {
             start: Cell::new(Instant::now()),
-            timeout,
+            interval,
         }
     }
 
-    pub fn on_timeout(&self, f: impl FnOnce()) {
-        if self.start.get().elapsed() > self.timeout {
-            f();
+    pub fn interval(&self) -> Duration {
+        self.interval
+    }
+
+    pub fn set_interval(&mut self, interval: Duration) {
+        self.interval = interval;
+    }
+
+    pub fn restart(&self) {
+        self.start.set(Instant::now());
+    }
+
+    pub fn is_time_out(&self) -> bool {
+        if self.start.get().elapsed() > self.interval {
             self.start.set(Instant::now());
+            return true;
         }
+
+        false
     }
 }
 

@@ -16,17 +16,9 @@ use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, Mes
 pub type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
 #[non_exhaustive]
-pub enum AudioSystemMessage {
-    Notification(AudioSystemNotification),
-}
+pub enum AudioSystemMessage {}
 
 impl Message for AudioSystemMessage {}
-
-impl From<AudioSystemNotification> for AudioSystemMessage {
-    fn from(msg: AudioSystemNotification) -> Self {
-        Self::Notification(msg)
-    }
-}
 
 #[non_exhaustive]
 pub enum AudioSystemControlMessage {
@@ -37,7 +29,7 @@ impl Message for AudioSystemControlMessage {}
 
 pub struct AudioSystem {
     endpoint: AudioSystemEndpoint,
-    notification_receiver: MessageReceiver<AudioSystemNotification>,
+    notification_receiver: MessageReceiver<AudioSystemElementMessage>,
 
     active_audio_receiver: Option<AudioReceiverStateMachine>,
     audio_receivers: HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
@@ -74,7 +66,7 @@ impl AudioSystem {
 
 fn collect_audio_receivers(
     mut audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
-    notification_sender: MessageSender<AudioSystemNotification>,
+    notification_sender: MessageSender<AudioSystemElementMessage>,
 ) -> HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>> {
     audio_receivers_builders
         .drain(..)
@@ -89,7 +81,7 @@ fn collect_audio_receivers(
 
 fn collect_virtual_microphones(
     mut virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
-    notification_sender: MessageSender<AudioSystemNotification>,
+    notification_sender: MessageSender<AudioSystemElementMessage>,
 ) -> HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>> {
     virtual_mics_builders
         .drain(..)
@@ -123,9 +115,6 @@ crate::impl_control_message_handler! {
 
 impl Runnable for AudioSystem {
     fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
-        self.notification_receiver
-            .forward(self.endpoint().as_sender().clone());
-
         self.endpoint()
             .iter()
             .for_each(|msg| msg.handle(self, &mut *flow));

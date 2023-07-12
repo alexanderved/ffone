@@ -13,8 +13,6 @@ pub enum Error {
     WrongNetworkPacketHeader,
     #[error("No device was found")]
     NoDevice,
-    #[error("The device has disconnected")]
-    DeviceDisconnected,
     #[error("The transition from the current runnable state to the next one is forbidden")]
     WrongRunnableState,
     #[error("Other error occured: {0}")]

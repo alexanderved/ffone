@@ -4,11 +4,14 @@ use super::*;
 use crate::link::LanLink;
 
 use core::device::discoverer::*;
+use core::device::element::DeviceSystemElementMessage;
 use core::device::link::*;
 use core::device::*;
 use core::error;
+use core::mueue::*;
 use core::util::ControlFlow;
-use core::util::{Component, Runnable};
+use core::util::Element;
+use core::util::Runnable;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -16,16 +19,16 @@ use std::collections::HashSet;
 pub const BROADCAST_PORT: u16 = 31703;
 
 pub struct LanDiscoverer {
-    end: Option<DeviceDiscovererEndpoint>,
+    send: MessageSender<DeviceSystemElementMessage>,
     infos: HashMap<DeviceInfo, LanDeviceInfo>,
 
     broadcast: UdpBroadcastListener,
 }
 
 impl LanDiscoverer {
-    pub fn new() -> error::Result<Self> {
+    pub fn new(send: MessageSender<DeviceSystemElementMessage>) -> error::Result<Self> {
         Ok(Self {
-            end: None,
+            send,
             infos: HashMap::new(),
 
             broadcast: UdpBroadcastListener::new(BROADCAST_PORT)?,
@@ -48,32 +51,29 @@ impl LanDiscoverer {
     }
 }
 
-impl Component for LanDiscoverer {
-    type Message = DeviceDiscovererMessage;
-    type ControlMessage = DeviceDiscovererControlMessage;
+impl Element for LanDiscoverer {
+    type Message = DeviceSystemElementMessage;
 
-    fn endpoint(&self) -> DeviceDiscovererEndpoint {
-        self.end
-            .clone()
-            .expect("A device discoverer endpoint wasn't set")
+    fn sender(&self) -> core::mueue::MessageSender<Self::Message> {
+        self.send.clone()
     }
 
-    fn connect(&mut self, end: DeviceDiscovererEndpoint) {
-        self.end = Some(end);
+    fn connect(&mut self, send: MessageSender<DeviceSystemElementMessage>) {
+        self.send = send;
     }
 }
 
 impl Runnable for LanDiscoverer {
-    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
         let msg = self.discover_devices().map_or_else(
-            DeviceDiscovererMessage::Error,
-            DeviceDiscovererMessage::NewDevicesDiscovered,
+            DeviceSystemElementMessage::Error,
+            DeviceSystemElementMessage::NewDevicesDiscovered,
         );
         self.send(msg);
 
-        self.endpoint()
-            .iter()
-            .for_each(|msg| msg.handle(self, &mut *flow));
+        /*self.endpoint()
+        .iter()
+        .for_each(|msg| msg.handle(self, &mut *flow)); */
 
         Ok(())
     }
@@ -90,7 +90,7 @@ impl DeviceDiscoverer for LanDiscoverer {
 
         if link.is_err() {
             self.infos.remove(&info);
-            self.send(DeviceDiscovererMessage::DeviceUnreachable(info));
+            self.send(DeviceSystemElementMessage::DeviceUnreachable(info));
         }
 
         Ok(Box::new(link?))
@@ -102,8 +102,7 @@ mod tests {
     use super::*;
     use crate::network::*;
 
-    use core::mueue::*;
-
+    use core::util::RunnableStateMachine;
     use std::collections::HashSet;
     use std::net::UdpSocket;
     use std::net::{Ipv4Addr, SocketAddr};
@@ -171,61 +170,28 @@ mod tests {
         device_handle.join().unwrap();
     }
 
-    fn run_disoverer() -> error::Result<(
-        MessageEndpoint<DeviceDiscovererMessage, DeviceDiscovererControlMessage>,
-        JoinHandle<()>,
-    )> {
-        let mut discoverer = LanDiscoverer::new()?;
-        let (disc_end, disc_end1) = bidirectional_queue();
-        discoverer.connect(disc_end1);
-
-        let disc_handle = thread::spawn(move || {
-            let _ = discoverer.run();
-        });
-
-        Ok((disc_end, disc_handle))
-    }
-
-    fn stop_discoverer(
-        (disc_send, disc_handle): (
-            MessageEndpoint<DeviceDiscovererMessage, DeviceDiscovererControlMessage>,
-            JoinHandle<()>,
-        ),
-    ) {
-        let _ = disc_send.send(DeviceDiscovererControlMessage::Stop);
-        disc_handle.join().unwrap();
-    }
-
     #[test]
     fn test_enumerate_devices() -> error::Result<()> {
         let (device_send, device_handle) = run_device("fake")?;
-        let (disc_end, disc_handle) = run_disoverer()?;
         let (device_send1, device_handle1) = run_device("fake1")?;
 
-        let _ = disc_end.send(DeviceDiscovererControlMessage::EnumerateDevices);
+        let (disc_send, _disc_recv) = unidirectional_queue();
+        let mut discoverer = RunnableStateMachine::new_running(LanDiscoverer::new(disc_send)?)
+            .map_err(|(_, err)| err)?;
 
         let mut infos = HashSet::new();
         while infos.len() < 2 {
-            for msg in disc_end.iter() {
-                match msg {
-                    DeviceDiscovererMessage::DevicesEnumerated(devs) => {
-                        infos.clear();
-                        infos.extend(devs);
-                    }
-                    DeviceDiscovererMessage::NewDevicesDiscovered(devs) => {
-                        infos.extend(devs);
-                    }
-                    _ => unimplemented!(),
-                }
+            if let Some(_) = discoverer.proceed() {
+                infos.extend(discoverer.as_runnable().enumerate_devices())
             }
         }
+        discoverer.stop()?;
 
         assert!(infos.contains(&DeviceInfo::new("fake")), "{:?}", infos);
         assert!(infos.contains(&DeviceInfo::new("fake1")), "{:?}", infos);
 
         stop_device((device_send, device_handle));
         stop_device((device_send1, device_handle1));
-        stop_discoverer((disc_end, disc_handle));
 
         Ok(())
     }

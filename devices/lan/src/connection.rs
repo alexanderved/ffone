@@ -1,8 +1,11 @@
 use super::network::*;
 
+use core::device::{DeviceMessage, HostMessage};
 use core::error;
 
+use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use mio::net::*;
 use mio::*;
@@ -13,6 +16,8 @@ pub(super) struct TcpConnection {
     socket: TcpStream,
     poll: Poll,
     events: Events,
+
+    received_messages: Vec<DeviceMessage>,
 }
 
 impl TcpConnection {
@@ -33,6 +38,8 @@ impl TcpConnection {
             socket,
             poll,
             events,
+
+            received_messages: vec![],
         })
     }
 
@@ -40,24 +47,18 @@ impl TcpConnection {
         &self.socket
     }
 
-    pub(super) fn send<S>(&mut self, data: &S) -> error::Result<()>
-    where
-        S: serde::Serialize,
-    {
-        if !self.is_open() {
-            return Err(error::Error::DeviceDisconnected);
-        }
-
+    pub(super) fn send(
+        &mut self,
+        data: &HostMessage,
+        timeout: Option<Duration>,
+        mut retries: Option<usize>,
+    ) -> error::Result<()> {
         let packet = NetworkPacket::serialize(data)?;
 
         loop {
-            self.poll.poll(&mut self.events, None)?;
+            let _ = self.poll.poll(&mut self.events, timeout);
 
             for e in self.events.iter() {
-                if e.is_write_closed() {
-                    return Err(error::Error::DeviceDisconnected);
-                }
-
                 if e.token() != DEVICE_AVAILABLE || !e.is_writable() {
                     continue;
                 }
@@ -66,54 +67,58 @@ impl TcpConnection {
                     return Ok(());
                 }
             }
-        }
-    }
 
-    pub(super) fn recv<D>(&mut self) -> error::Result<D>
-    where
-        D: for<'de> serde::Deserialize<'de>,
-    {
-        if !self.is_open() {
-            return Err(error::Error::DeviceDisconnected);
-        }
-
-        loop {
-            self.poll.poll(&mut self.events, None)?;
-
-            for e in self.events.iter() {
-                if e.is_read_closed() {
-                    return Err(error::Error::DeviceDisconnected);
-                }
-
-                if e.token() != DEVICE_AVAILABLE || !e.is_readable() {
-                    continue;
-                }
-
-                let Ok(packet) = self.socket.recv_packet() else {
-                    continue;
-                };
-                let data = packet.deserialize();
-
-                if data.is_ok() {
-                    return data;
-                }
+            retries.as_mut().map(|retries| *retries -= 1);
+            if retries.is_some_and(|retries| retries == 0) {
+                return Err(error::Error::Other("All send retries failed".to_string()));
             }
         }
     }
 
-    pub(super) fn is_open(&self) -> bool {
-        use std::io;
+    pub(super) fn recv_to_buf(&mut self, timeout: Option<Duration>) -> error::Result<()> {
+        let _ = self.poll.poll(&mut self.events, timeout);
 
-        let res = self.socket.peek(&mut [0]);
-        //dbg!(&res);
+        for e in self.events.iter() {
+            if e.token() != DEVICE_AVAILABLE || !e.is_readable() {
+                continue;
+            }
 
-        match res {
-            Ok(0) => false,
-            Err(err) if err.kind() == io::ErrorKind::ConnectionAborted => false,
-            Err(err) if err.kind() == io::ErrorKind::ConnectionReset => false,
-            Err(err) if err.kind() == io::ErrorKind::BrokenPipe => false,
-            Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => false,
-            _ => true,
+            loop {
+                let packet = self.socket().recv_packet();
+                match packet {
+                    Ok(packet) => {
+                        let Ok(data) = packet.deserialize() else {
+                            continue;
+                        };
+                        self.received_messages.push(data);
+                    }
+                    Err(error::Error::WrongNetworkPacketHeader) => continue,
+                    Err(error::Error::Io(io)) if io.kind() == io::ErrorKind::WouldBlock => break,
+                    Err(error::Error::Io(io)) if is_io_error_critical(&io) => {
+                        return Err(error::Error::Other("Device disconnected".to_string()));
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
         }
+
+        Ok(())
+    }
+
+    pub(super) fn filter_received_messages<F>(&mut self, f: F)
+    where
+        F: FnMut(DeviceMessage) -> Option<DeviceMessage>,
+    {
+        self.received_messages = self.received_messages.drain(..).filter_map(f).collect();
+    }
+}
+
+fn is_io_error_critical(err: &io::Error) -> bool {
+    match err.kind() {
+        io::ErrorKind::ConnectionAborted => true,
+        io::ErrorKind::ConnectionReset => true,
+        io::ErrorKind::BrokenPipe => true,
+        io::ErrorKind::UnexpectedEof => true,
+        _ => false,
     }
 }

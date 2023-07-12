@@ -2,21 +2,27 @@ use crate::connection::TcpConnection;
 
 use super::*;
 
+use core::device::element::DeviceSystemElementMessage;
 use core::device::link::*;
 use core::device::*;
 use core::error;
-use core::util::{Component, ControlFlow, Runnable, Timer};
+use core::util::Element;
+use core::util::{ControlFlow, Runnable, Timer};
 
 use core::mueue::*;
 
 use std::time::Duration;
 
 pub struct LanLink {
-    end: Option<DeviceLinkEndpoint>,
+    send: Option<MessageSender<DeviceSystemElementMessage>>,
+
     info: LanDeviceInfo,
+    audio_addr: Option<SocketAddr>,
 
     link: TcpConnection,
-    check_connection_timer: Timer,
+
+    ping_timer: Timer,
+    pong_timer: Timer,
 }
 
 impl LanLink {
@@ -24,50 +30,76 @@ impl LanLink {
         let link = TcpConnection::new(info.addr)?;
 
         Ok(Self {
-            end: None,
+            send: None,
+
             info: info.clone(),
+            audio_addr: None,
 
             link,
-            check_connection_timer: Timer::new(Duration::from_secs(1)),
+
+            ping_timer: Timer::new(Duration::from_secs(1)),
+            pong_timer: Timer::new(Duration::from_secs(5)),
         })
     }
 
-    pub fn get_from_device<U>(&mut self, cmd: DeviceCommand) -> error::Result<U>
-    where
-        U: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
-    {
-        self.link.send(&cmd)?;
-        let res = self.link.recv()?;
+    pub fn ping_device(&mut self) -> error::Result<()> {
+        const PING_TIMEOUT: Duration = Duration::from_millis(100);
+        const PING_RETRIES: usize = 10;
 
-        Ok(res)
+        self.link
+            .send(&HostMessage::Ping, Some(PING_TIMEOUT), Some(PING_RETRIES))?;
+
+        Ok(())
     }
 }
 
-impl Component for LanLink {
-    type Message = DeviceLinkMessage;
-    type ControlMessage = DeviceLinkControlMessage;
+impl Element for LanLink {
+    type Message = DeviceSystemElementMessage;
 
-    fn endpoint(&self) -> MessageEndpoint<Self::ControlMessage, Self::Message> {
-        self.end.clone().expect("A device link endpoint wasn't set")
+    fn sender(&self) -> MessageSender<Self::Message> {
+        self.send
+            .clone()
+            .expect("A device link endpoint wasn't set")
     }
 
-    fn connect(&mut self, end: MessageEndpoint<Self::ControlMessage, Self::Message>) {
-        self.end = Some(end);
+    fn connect(&mut self, send: MessageSender<Self::Message>) {
+        self.send = Some(send);
     }
 }
 
 impl Runnable for LanLink {
     fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
-        self.check_connection_timer.on_timeout(|| {
-            if !self.link.is_open() {
+        if self.ping_timer.is_time_out() {
+            if self.ping_device().is_err() {
                 *flow = ControlFlow::Break;
-                self.send(DeviceLinkMessage::DeviceDisconnected);
-            }
-        });
 
-        self.endpoint()
-            .iter()
-            .for_each(|msg| msg.handle(self, &mut *flow));
+                return Ok(());
+            }
+        }
+
+        if self.pong_timer.is_time_out() {
+            *flow = ControlFlow::Break;
+
+            return Ok(());
+        }
+
+        self.link.recv_to_buf(Some(Duration::from_millis(0)))?;
+        self.link.filter_received_messages(|msg| {
+            match msg {
+                DeviceMessage::Info { info } => self.info.info = info,
+                DeviceMessage::AudioPort { port } => {
+                    let ip = self.info.addr.ip();
+
+                    self.audio_addr = Some(SocketAddr::from((ip, port)));
+                }
+                DeviceMessage::Pong => {
+                    self.pong_timer.restart();
+                }
+                msg => return Some(msg),
+            }
+
+            None
+        });
 
         Ok(())
     }
@@ -78,11 +110,8 @@ impl DeviceLink for LanLink {
         self.info.info()
     }
 
-    fn audio_address(&mut self) -> error::Result<SocketAddr> {
-        let ip = self.link.socket().peer_addr()?.ip();
-        let port = self.get_from_device::<u16>(DeviceCommand::GetAudioPort)?;
-
-        Ok(SocketAddr::from((ip, port)))
+    fn audio_address(&self) -> Option<SocketAddr> {
+        self.audio_addr.clone()
     }
 }
 
@@ -91,6 +120,7 @@ mod tests {
     use super::*;
     use crate::network::*;
 
+    use core::util::RunnableStateMachine;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::thread::{self, JoinHandle};
 
@@ -145,20 +175,32 @@ mod tests {
             let msg = packet.deserialize()?;
 
             let packet = match msg {
-                DeviceCommand::GetInfo => NetworkPacket::serialize(&self.info())?,
-                DeviceCommand::GetAudioPort => NetworkPacket::serialize(&self.audio_port())?,
+                HostMessage::GetInfo => {
+                    NetworkPacket::serialize(&DeviceMessage::Info { info: self.info() })
+                }
+                HostMessage::GetAudioPort => NetworkPacket::serialize(&DeviceMessage::AudioPort {
+                    port: self.audio_port(),
+                }),
+                HostMessage::Ping => NetworkPacket::serialize(&DeviceMessage::Pong),
                 _ => return Ok(()),
             };
 
-            link.send_packet(&packet)?;
+            link.send_packet(&packet?)?;
 
             Ok(())
         }
 
         fn on_start(&mut self) -> error::Result<()> {
-            let link = self.listener.accept()?.0;
+            let mut link = self.listener.accept()?.0;
             link.set_nonblocking(true)?;
             link.set_nodelay(true)?;
+
+            link.send_packet(&NetworkPacket::serialize(&DeviceMessage::Info {
+                info: self.info(),
+            })?)?;
+            /* link.send_packet(&NetworkPacket::serialize(&DeviceMessage::AudioPort {
+                port: self.audio_port(),
+            })?)?; */
 
             self.link = Some(link);
 
@@ -184,54 +226,34 @@ mod tests {
         device_handle.join().unwrap();
     }
 
-    fn run_link(
-        port: u16,
-    ) -> error::Result<(
-        MessageEndpoint<DeviceLinkMessage, DeviceLinkControlMessage>,
-        JoinHandle<()>,
-    )> {
+    fn create_link(port: u16) -> error::Result<RunnableStateMachine<LanLink>> {
+        let (link_send, _link_recv) = unidirectional_queue();
         let mut link = LanLink::new(LanDeviceInfo::new(
             "fake",
             (Ipv4Addr::LOCALHOST, port).into(),
         ))?;
-        let (link_end, link_end1) = bidirectional_queue();
-        link.connect(link_end1);
+        link.connect(link_send);
+        let link = RunnableStateMachine::new_running(link).map_err(|(_, err)| err)?;
 
-        let link_handle = thread::spawn(move || {
-            let _ = link.run();
-        });
-
-        Ok((link_end, link_handle))
-    }
-
-    fn stop_link(
-        (link_end, link_handle): (
-            MessageEndpoint<DeviceLinkMessage, DeviceLinkControlMessage>,
-            JoinHandle<()>,
-        ),
-    ) {
-        let _ = link_end.send(DeviceLinkControlMessage::Stop);
-        link_handle.join().unwrap();
+        Ok(link)
     }
 
     #[test]
     fn test_get_info() -> error::Result<()> {
         let device_port = 31707;
         let (device_send, device_handle) = run_device("fake", device_port)?;
-        let (link_end, link_handle) = run_link(device_port)?;
+        let mut link = create_link(device_port)?;
 
-        let _ = link_end.send(DeviceLinkControlMessage::GetInfo);
-        let info = 'outer: loop {
-            for msg in link_end.iter() {
-                if let DeviceLinkMessage::Info(info) = msg {
-                    break 'outer info;
-                };
-            }
-        };
+        let mut info = DeviceInfo::new("");
+        while let Some(_) = link.proceed() {
+            info = link.as_runnable().info();
+            break;
+        }
+        link.stop()?;
+
         assert_eq!(info, DeviceInfo::new("fake"));
 
         stop_device((device_send, device_handle));
-        stop_link((link_end, link_handle));
 
         Ok(())
     }
@@ -240,24 +262,23 @@ mod tests {
     fn test_get_audio_address() -> error::Result<()> {
         let device_port = 31708;
         let (device_send, device_handle) = run_device("fake", device_port)?;
-        let (link_end, link_handle) = run_link(device_port)?;
+        let mut link = create_link(device_port)?;
 
-        let _ = link_end.send(DeviceLinkControlMessage::GetAudioAddress);
+        stop_device((device_send, device_handle));
 
-        let addr = 'outer: loop {
-            for msg in link_end.iter() {
-                if let DeviceLinkMessage::AudioAddress(addr) = msg {
-                    break 'outer addr;
-                };
+        let mut addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0));
+        while let Some(_) = link.proceed() {
+            if let Some(address) = link.as_runnable_mut().audio_address() {
+                addr = address;
+                break;
             }
-        };
+        }
+        link.stop()?;
+
         assert_eq!(
             addr,
             SocketAddr::from((Ipv4Addr::LOCALHOST, FakeDevice::AUDIO_PORT))
         );
-
-        stop_device((device_send, device_handle));
-        stop_link((link_end, link_handle));
 
         Ok(())
     }

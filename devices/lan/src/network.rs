@@ -5,13 +5,14 @@ use std::{
     net::SocketAddr,
 };
 
+#[derive(Debug)]
 pub(super) struct NetworkPacket(Vec<u8>);
 
 impl NetworkPacket {
     pub(super) const HEADER_PREFIX: [u8; 5] = [0xF, 0xF, 0x0, 0x12, 0xE];
 
     pub(super) const HEADER_PREFIX_LEN: usize = Self::HEADER_PREFIX.len();
-    pub(super) const NO_SIZE_BYTES: usize = usize::BITS as usize / 8;
+    pub(super) const NO_SIZE_BYTES: usize = u64::BITS as usize / 8;
 
     pub(super) const HEADER_LEN: usize = Self::HEADER_PREFIX_LEN + Self::NO_SIZE_BYTES;
 
@@ -21,7 +22,7 @@ impl NetworkPacket {
     {
         let data_ser = serde_json::to_vec(data)?;
         let mut bytes = Self::HEADER_PREFIX.to_vec();
-        let size_bytes = data_ser.len().to_be_bytes();
+        let size_bytes = (data_ser.len() as u64).to_be_bytes();
 
         bytes.extend_from_slice(&size_bytes);
         bytes.extend(data_ser);
@@ -44,7 +45,7 @@ impl NetworkPacket {
         let mut size_bytes = [0; Self::NO_SIZE_BYTES];
         size_bytes.clone_from_slice(&header[Self::HEADER_PREFIX_LEN..]);
 
-        usize::from_be_bytes(size_bytes)
+        u64::from_be_bytes(size_bytes) as usize
     }
 }
 
@@ -70,6 +71,7 @@ impl UdpSocketExt for mio::net::UdpSocket {
         let (header_len, _) = self.peek_from(&mut header)?;
 
         if !NetworkPacket::is_header_correct(&header) {
+            let _ = self.recv_from(&mut [0]);
             return Err(error::Error::WrongNetworkPacketHeader);
         }
 
@@ -98,6 +100,7 @@ impl UdpSocketExt for std::net::UdpSocket {
         let header_len = self.peek(&mut header)?;
 
         if !NetworkPacket::is_header_correct(&header) {
+            let _ = self.recv_from(&mut [0]);
             return Err(error::Error::WrongNetworkPacketHeader);
         }
 
@@ -122,7 +125,7 @@ pub(super) trait TcpStreamExt {
     fn has_pending_packet(&self) -> bool;
 }
 
-impl TcpStreamExt for mio::net::TcpStream {
+impl TcpStreamExt for &mio::net::TcpStream {
     fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
         Ok(self.write(&packet.0)?)
     }
@@ -131,7 +134,12 @@ impl TcpStreamExt for mio::net::TcpStream {
         let mut header = [0u8; NetworkPacket::HEADER_LEN];
         let header_len = self.peek(&mut header)?;
 
+        if header_len == 0 {
+            return Err(error::Error::Other("Device is disconnected".to_string()));
+        }
+
         if !NetworkPacket::is_header_correct(&header) {
+            let _ = self.read(&mut [0]);
             return Err(error::Error::WrongNetworkPacketHeader);
         }
 
@@ -150,6 +158,20 @@ impl TcpStreamExt for mio::net::TcpStream {
     }
 }
 
+impl TcpStreamExt for mio::net::TcpStream {
+    fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
+        (&mut &*self).send_packet(packet)
+    }
+
+    fn recv_packet(&mut self) -> error::Result<NetworkPacket> {
+        (&mut &*self).recv_packet()
+    }
+
+    fn has_pending_packet(&self) -> bool {
+        (&&*self).has_pending_packet()
+    }
+}
+
 impl TcpStreamExt for &std::net::TcpStream {
     fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
         Ok(self.write(&packet.0)?)
@@ -159,7 +181,12 @@ impl TcpStreamExt for &std::net::TcpStream {
         let mut header = [0u8; NetworkPacket::HEADER_LEN];
         let header_len = self.peek(&mut header)?;
 
+        if header_len == 0 {
+            return Err(error::Error::Other("Device is disconnected".to_string()));
+        }
+
         if !NetworkPacket::is_header_correct(&header) {
+            let _ = self.read(&mut [0]);
             return Err(error::Error::WrongNetworkPacketHeader);
         }
 
