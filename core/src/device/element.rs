@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::audio_system::EncodedAudioBuffer;
 use crate::error;
 use crate::util::*;
 
@@ -11,6 +12,8 @@ pub enum DeviceSystemElementMessage {
     DeviceUnreachable(DeviceInfo),
 
     DeviceUnlinked,
+
+    EncodedAudioReceived(EncodedAudioBuffer),
 
     Error(error::Error),
 }

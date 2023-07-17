@@ -1,4 +1,6 @@
-use crate::connection::TcpConnection;
+use crate::audio_stream::AudioStream;
+use crate::message_stream::MessageStream;
+use crate::poller::Poller;
 
 use super::*;
 
@@ -13,13 +15,16 @@ use core::mueue::*;
 
 use std::time::Duration;
 
+const PING_INTERVAL: Duration = Duration::from_secs(5);
+const PONG_INTERVAL: Duration = Duration::from_secs(10);
+
 pub struct LanLink {
     send: Option<MessageSender<DeviceSystemElementMessage>>,
-
     info: LanDeviceInfo,
-    audio_addr: Option<SocketAddr>,
 
-    link: TcpConnection,
+    poller: Poller,
+    msg_stream: MessageStream,
+    audio_stream: Option<AudioStream>,
 
     ping_timer: Timer,
     pong_timer: Timer,
@@ -27,29 +32,43 @@ pub struct LanLink {
 
 impl LanLink {
     pub fn new(info: LanDeviceInfo) -> error::Result<Self> {
-        let link = TcpConnection::new(info.addr)?;
-
         Ok(Self {
             send: None,
-
             info: info.clone(),
-            audio_addr: None,
 
-            link,
+            poller: Poller::new()?,
+            msg_stream: MessageStream::new(info.addr)?,
+            audio_stream: None,
 
-            ping_timer: Timer::new(Duration::from_secs(1)),
-            pong_timer: Timer::new(Duration::from_secs(5)),
+            ping_timer: Timer::new(PING_INTERVAL),
+            pong_timer: Timer::new(PONG_INTERVAL),
         })
     }
 
-    pub fn ping_device(&mut self) -> error::Result<()> {
-        const PING_TIMEOUT: Duration = Duration::from_millis(100);
-        const PING_RETRIES: usize = 10;
+    pub fn on_pong(&mut self) {
+        self.pong_timer.restart();
+    }
 
-        self.link
-            .send(&HostMessage::Ping, Some(PING_TIMEOUT), Some(PING_RETRIES))?;
+    pub fn on_info_received(&mut self, info: DeviceInfo) {
+        self.info.info = info;
+    }
 
-        Ok(())
+    pub fn on_audio_port_received(&mut self, port: u16) {
+        if let Some(audio_stream) = self.audio_stream.as_mut() {
+            let _ = self.poller.deregister_audio_stream(audio_stream);
+        }
+
+        let ip = self.info.addr.ip();
+        let mut audio_stream = match AudioStream::new(SocketAddr::from((ip, port))) {
+            Ok(audio_stream) => audio_stream,
+            Err(_) => {
+                self.msg_stream.store(HostMessage::GetAudioPort);
+                return;
+            }
+        };
+
+        let _ = self.poller.register_audio_stream(&mut audio_stream);
+        self.audio_stream = Some(audio_stream);
     }
 }
 
@@ -70,11 +89,7 @@ impl Element for LanLink {
 impl Runnable for LanLink {
     fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
         if self.ping_timer.is_time_out() {
-            if self.ping_device().is_err() {
-                *flow = ControlFlow::Break;
-
-                return Ok(());
-            }
+            self.msg_stream.store(HostMessage::Ping);
         }
 
         if self.pong_timer.is_time_out() {
@@ -83,23 +98,43 @@ impl Runnable for LanLink {
             return Ok(());
         }
 
-        self.link.recv_to_buf(Some(Duration::from_millis(0)))?;
-        self.link.filter_received_messages(|msg| {
+        self.poller
+            .poll(&mut self.msg_stream, self.audio_stream.as_mut())?;
+
+        while let Some(msg) = self.msg_stream.load() {
             match msg {
-                DeviceMessage::Info { info } => self.info.info = info,
-                DeviceMessage::AudioPort { port } => {
-                    let ip = self.info.addr.ip();
-
-                    self.audio_addr = Some(SocketAddr::from((ip, port)));
-                }
-                DeviceMessage::Pong => {
-                    self.pong_timer.restart();
-                }
-                msg => return Some(msg),
+                DeviceMessage::Pong => self.on_pong(),
+                DeviceMessage::Info { info } => self.on_info_received(info),
+                DeviceMessage::AudioPort { port } => self.on_audio_port_received(port),
             }
+        }
 
-            None
-        });
+        while let Some(audio) = self
+            .audio_stream
+            .as_mut()
+            .and_then(|audio_stream| audio_stream.load())
+        {
+            self.send(DeviceSystemElementMessage::EncodedAudioReceived(audio));
+        }
+
+        Ok(())
+    }
+
+    fn on_start(&mut self) -> error::Result<()> {
+        self.poller.register_message_stream(&mut self.msg_stream)?;
+        if let Some(audio_stream) = self.audio_stream.as_mut() {
+            self.poller.register_audio_stream(audio_stream)?;
+        }
+
+        Ok(())
+    }
+
+    fn on_stop(&mut self) -> error::Result<()> {
+        self.poller
+            .deregister_message_stream(&mut self.msg_stream)?;
+        if let Some(audio_stream) = self.audio_stream.as_mut() {
+            self.poller.deregister_audio_stream(audio_stream)?;
+        }
 
         Ok(())
     }
@@ -108,10 +143,6 @@ impl Runnable for LanLink {
 impl DeviceLink for LanLink {
     fn info(&self) -> DeviceInfo {
         self.info.info()
-    }
-
-    fn audio_address(&self) -> Option<SocketAddr> {
-        self.audio_addr.clone()
     }
 }
 
@@ -175,14 +206,10 @@ mod tests {
             let msg = packet.deserialize()?;
 
             let packet = match msg {
-                HostMessage::GetInfo => {
-                    NetworkPacket::serialize(&DeviceMessage::Info { info: self.info() })
-                }
-                HostMessage::GetAudioPort => NetworkPacket::serialize(&DeviceMessage::AudioPort {
-                    port: self.audio_port(),
-                }),
                 HostMessage::Ping => NetworkPacket::serialize(&DeviceMessage::Pong),
-                _ => return Ok(()),
+                HostMessage::GetAudioPort => NetworkPacket::serialize(&DeviceMessage::AudioPort {
+                    port: Self::AUDIO_PORT,
+                }),
             };
 
             link.send_packet(&packet?)?;
@@ -226,8 +253,13 @@ mod tests {
         device_handle.join().unwrap();
     }
 
-    fn create_link(port: u16) -> error::Result<RunnableStateMachine<LanLink>> {
-        let (link_send, _link_recv) = unidirectional_queue();
+    fn create_link(
+        port: u16,
+    ) -> error::Result<(
+        RunnableStateMachine<LanLink>,
+        MessageReceiver<DeviceSystemElementMessage>,
+    )> {
+        let (link_send, link_recv) = unidirectional_queue();
         let mut link = LanLink::new(LanDeviceInfo::new(
             "fake",
             (Ipv4Addr::LOCALHOST, port).into(),
@@ -235,14 +267,14 @@ mod tests {
         link.connect(link_send);
         let link = RunnableStateMachine::new_running(link).map_err(|(_, err)| err)?;
 
-        Ok(link)
+        Ok((link, link_recv))
     }
 
     #[test]
-    fn test_get_info() -> error::Result<()> {
+    fn test_on_info_received() -> error::Result<()> {
         let device_port = 31707;
         let (device_send, device_handle) = run_device("fake", device_port)?;
-        let mut link = create_link(device_port)?;
+        let (mut link, _link_recv) = create_link(device_port)?;
 
         let mut info = DeviceInfo::new("");
         while let Some(_) = link.proceed() {
@@ -259,14 +291,17 @@ mod tests {
     }
 
     #[test]
-    fn test_get_audio_address() -> error::Result<()> {
+    fn test_on_audio_port_received() -> error::Result<()> {
         let device_port = 31708;
         let (device_send, device_handle) = run_device("fake", device_port)?;
-        let mut link = create_link(device_port)?;
+        let (mut link, _link_recv) = create_link(device_port)?;
 
         let mut addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0));
         while let Some(_) = link.proceed() {
-            if let Some(address) = link.as_runnable_mut().audio_address() {
+            if let Some(audio_stream) = link.as_runnable().audio_stream.as_ref() {
+                let Ok(address) = audio_stream.socket().peer_addr() else {
+                    continue;
+                };
                 addr = address;
                 break;
             }

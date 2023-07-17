@@ -71,15 +71,17 @@ impl Runnable for LanDiscoverer {
         );
         self.send(msg);
 
-        /*self.endpoint()
-        .iter()
-        .for_each(|msg| msg.handle(self, &mut *flow)); */
-
         Ok(())
     }
 }
 
 impl DeviceDiscoverer for LanDiscoverer {
+    fn info(&self) -> DeviceDiscovererInfo {
+        DeviceDiscovererInfo {
+            name: "Lan Device Discoverer".to_string(),
+        }
+    }
+
     fn enumerate_devices(&self) -> Box<dyn Iterator<Item = DeviceInfo> + Send + Sync> {
         Box::new(self.infos.clone().into_iter().map(|(k, _)| k))
     }
@@ -101,11 +103,10 @@ impl DeviceDiscoverer for LanDiscoverer {
 mod tests {
     use super::*;
     use crate::network::*;
-
     use core::util::RunnableStateMachine;
+
     use std::collections::HashSet;
-    use std::net::UdpSocket;
-    use std::net::{Ipv4Addr, SocketAddr};
+    use std::net::*;
     use std::thread::{self, JoinHandle};
 
     struct StopDevice;

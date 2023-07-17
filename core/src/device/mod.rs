@@ -1,11 +1,15 @@
 pub mod discoverer;
 pub mod element;
 pub mod link;
-pub mod storage;
 
 use discoverer::*;
+use element::*;
 use link::*;
-use mueue::{Message, MessageEndpoint};
+use mueue::*;
+
+use crate::util::{Component, ControlFlow, Runnable};
+
+use std::collections::HashMap;
 
 pub type DeviceSystemEndpoint = MessageEndpoint<DeviceSystemControlMessage, DeviceSystemMessage>;
 
@@ -30,37 +34,66 @@ impl DeviceInfo {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
-#[serde(tag = "type")]
-pub enum HostMessage {
-    Ping,
-    Pong,
-
-    GetInfo,
-    GetAudioPort,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
-#[serde(tag = "type")]
-pub enum DeviceMessage {
-    Ping,
-    Pong,
-
-    Info { info: DeviceInfo },
-    AudioPort { port: u16 },
-}
-
 pub struct DeviceSystem {
     end: DeviceSystemEndpoint,
+    notification_recv: MessageReceiver<DeviceSystemElementMessage>,
 
     active_discoverer: Option<DeviceDiscovererStateMachine>,
-    discoverers: Vec<Box<dyn DeviceDiscoverer>>,
+    discoverers: HashMap<DeviceDiscovererInfo, Box<dyn DeviceDiscoverer>>,
 
     link: Option<DeviceLinkStateMachine>,
 }
 
-/* impl DeviceSystem {
-    pub fn new(end: DeviceSystemEndpoint, discoverers)
-} */
+impl DeviceSystem {
+    pub fn new(
+        end: DeviceSystemEndpoint,
+        discoverers_builders: Vec<Box<dyn DeviceDiscovererBuilder>>,
+    ) -> Self {
+        let (notification_send, notification_recv) = unidirectional_queue();
+        let discoverers = collect_discoverers(discoverers_builders, notification_send);
+
+        Self {
+            end,
+            notification_recv,
+
+            active_discoverer: None,
+            discoverers,
+
+            link: None,
+        }
+    }
+}
+
+impl Component for DeviceSystem {
+    type Message = DeviceSystemMessage;
+    type ControlMessage = DeviceSystemControlMessage;
+
+    fn endpoint(&self) -> MessageEndpoint<Self::ControlMessage, Self::Message> {
+        self.end.clone()
+    }
+
+    fn connect(&mut self, end: MessageEndpoint<Self::ControlMessage, Self::Message>) {
+        self.end = end;
+    }
+}
+
+impl Runnable for DeviceSystem {
+    fn update(&mut self, _flow: &mut ControlFlow) -> crate::error::Result<()> {
+        Ok(())
+    }
+}
+
+fn collect_discoverers(
+    discoverers_builders: Vec<Box<dyn DeviceDiscovererBuilder>>,
+    sender: MessageSender<DeviceSystemElementMessage>,
+) -> HashMap<DeviceDiscovererInfo, Box<dyn DeviceDiscoverer>> {
+    discoverers_builders
+        .into_iter()
+        .map(|mut builder| {
+            builder.set_sender(sender.clone());
+            builder
+        })
+        .filter_map(|builder| builder.build().ok())
+        .map(|disc| (disc.info(), disc))
+        .collect()
+}

@@ -1,7 +1,7 @@
 use core::error;
 
 use std::{
-    io::{Read, Write},
+    io::{self, Read, Write},
     net::SocketAddr,
 };
 
@@ -46,6 +46,14 @@ impl NetworkPacket {
         size_bytes.clone_from_slice(&header[Self::HEADER_PREFIX_LEN..]);
 
         u64::from_be_bytes(size_bytes) as usize
+    }
+
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -122,99 +130,67 @@ impl UdpSocketExt for std::net::UdpSocket {
 pub(super) trait TcpStreamExt {
     fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize>;
     fn recv_packet(&mut self) -> error::Result<NetworkPacket>;
-    fn has_pending_packet(&self) -> bool;
 }
 
-impl TcpStreamExt for &mio::net::TcpStream {
+impl<S: Read + Write> TcpStreamExt for S {
     fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
         Ok(self.write(&packet.0)?)
     }
 
     fn recv_packet(&mut self) -> error::Result<NetworkPacket> {
-        let mut header = [0u8; NetworkPacket::HEADER_LEN];
-        let header_len = self.peek(&mut header)?;
+        let mut started_reading = false;
 
-        if header_len == 0 {
-            return Err(error::Error::Other("Device is disconnected".to_string()));
+        let mut header = [0u8; NetworkPacket::HEADER_LEN];
+        let mut header_len = 0;
+        while header_len < NetworkPacket::HEADER_LEN {
+            let n = match self.read(&mut header[header_len..]) {
+                Ok(0) => return Err(error::Error::DeviceUnlinked),
+                Ok(n) => n,
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock && started_reading => continue,
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => break,
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
+                Err(err) => return Err(err.into()),
+            };
+
+            started_reading = true;
+            header_len += n;
         }
 
         if !NetworkPacket::is_header_correct(&header) {
-            let _ = self.read(&mut [0]);
             return Err(error::Error::WrongNetworkPacketHeader);
         }
 
         let size = NetworkPacket::read_size_from_header(&header[..header_len]);
         let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
+        bytes[..NetworkPacket::HEADER_LEN].clone_from_slice(&header);
 
-        let _ = self.read(&mut bytes)?;
+        let mut packet_len = NetworkPacket::HEADER_LEN;
+        while packet_len < NetworkPacket::HEADER_LEN + size {
+            let n = match self.read(&mut bytes[packet_len..]) {
+                Ok(0) => return Err(error::Error::DeviceUnlinked),
+                Ok(n) => n,
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) if is_io_error_critical(&err) => {
+                    return Err(error::Error::DeviceUnlinked);
+                }
+                Err(err) => return Err(err.into()),
+            };
+
+            packet_len += n;
+        }
 
         Ok(NetworkPacket(bytes))
     }
-
-    fn has_pending_packet(&self) -> bool {
-        let mut header = [0u8; NetworkPacket::HEADER_PREFIX_LEN];
-        self.peek(&mut header)
-            .is_ok_and(|n| NetworkPacket::is_header_correct(&header[..n]))
-    }
 }
 
-impl TcpStreamExt for mio::net::TcpStream {
-    fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
-        (&mut &*self).send_packet(packet)
-    }
-
-    fn recv_packet(&mut self) -> error::Result<NetworkPacket> {
-        (&mut &*self).recv_packet()
-    }
-
-    fn has_pending_packet(&self) -> bool {
-        (&&*self).has_pending_packet()
-    }
-}
-
-impl TcpStreamExt for &std::net::TcpStream {
-    fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
-        Ok(self.write(&packet.0)?)
-    }
-
-    fn recv_packet(&mut self) -> error::Result<NetworkPacket> {
-        let mut header = [0u8; NetworkPacket::HEADER_LEN];
-        let header_len = self.peek(&mut header)?;
-
-        if header_len == 0 {
-            return Err(error::Error::Other("Device is disconnected".to_string()));
-        }
-
-        if !NetworkPacket::is_header_correct(&header) {
-            let _ = self.read(&mut [0]);
-            return Err(error::Error::WrongNetworkPacketHeader);
-        }
-
-        let size = NetworkPacket::read_size_from_header(&header[..header_len]);
-        let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
-
-        let _ = self.read(&mut bytes)?;
-
-        Ok(NetworkPacket(bytes))
-    }
-
-    fn has_pending_packet(&self) -> bool {
-        let mut header = [0u8; NetworkPacket::HEADER_PREFIX_LEN];
-        self.peek(&mut header)
-            .is_ok_and(|n| NetworkPacket::is_header_correct(&header[..n]))
-    }
-}
-
-impl TcpStreamExt for std::net::TcpStream {
-    fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
-        (&mut &*self).send_packet(packet)
-    }
-
-    fn recv_packet(&mut self) -> error::Result<NetworkPacket> {
-        (&mut &*self).recv_packet()
-    }
-
-    fn has_pending_packet(&self) -> bool {
-        (&&*self).has_pending_packet()
-    }
+pub(super) fn is_io_error_critical(err: &io::Error) -> bool {
+    matches!(
+        err.kind(),
+        io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::BrokenPipe
+            | io::ErrorKind::UnexpectedEof
+    )
 }

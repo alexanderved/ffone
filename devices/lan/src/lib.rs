@@ -1,8 +1,10 @@
+mod audio_stream;
 mod broadcast;
-mod connection;
 pub mod discoverer;
 pub mod link;
+mod message_stream;
 mod network;
+mod poller;
 
 use core::device::DeviceInfo;
 
@@ -25,4 +27,22 @@ impl LanDeviceInfo {
     pub fn info(&self) -> DeviceInfo {
         self.info.clone()
     }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
+#[serde(tag = "type")]
+pub enum HostMessage {
+    Ping,
+    GetAudioPort,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
+#[serde(tag = "type")]
+pub enum DeviceMessage {
+    Pong,
+
+    Info { info: DeviceInfo },
+    AudioPort { port: u16 },
 }

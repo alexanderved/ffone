@@ -5,45 +5,18 @@ use super::DeviceInfo;
 use crate::error;
 use crate::util::*;
 
-use mueue::*;
-
-pub type DeviceDiscovererEndpoint =
-    MessageEndpoint<DeviceDiscovererControlMessage, DeviceDiscovererMessage>;
 pub type DeviceDiscovererStateMachine = RunnableStateMachine<Box<dyn DeviceDiscoverer>>;
 
-pub enum DeviceDiscovererMessage {
-    DevicesEnumerated(Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>),
-
-    LinkOpened(Box<dyn DeviceLink>),
-    OpenLinkError(error::Error),
-
-    NewDevicesDiscovered(Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>),
-    DeviceUnreachable(DeviceInfo),
-    Error(error::Error),
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DeviceDiscovererInfo {
+    pub name: String,
 }
-
-impl Message for DeviceDiscovererMessage {}
-
-pub enum DeviceDiscovererControlMessage {
-    EnumerateDevices,
-    OpenLink(DeviceInfo),
-
-    Stop,
-}
-
-impl Message for DeviceDiscovererControlMessage {}
 
 pub trait DeviceDiscoverer: DeviceSystemElement + Send {
+    fn info(&self) -> DeviceDiscovererInfo;
     fn enumerate_devices(&self) -> Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>;
-
     fn open_link(&mut self, info: DeviceInfo) -> error::Result<Box<dyn DeviceLink>>;
 }
 
-/* crate::impl_control_message_handler! {
-    @component DeviceDiscoverer;
-    @message DeviceDiscovererMessage;
-    @control_message DeviceDiscovererControlMessage;
-
-    EnumerateDevices => enumerate_devices => DevicesEnumerated;
-    OpenLink(info) => open_link => @ok LinkOpened, @err OpenLinkError;
-} */
+crate::trait_alias!(pub DeviceDiscovererBuilder:
+    DeviceSystemElementBuilder<Element = dyn DeviceDiscoverer>);

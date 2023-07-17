@@ -27,9 +27,12 @@ pub enum AudioSystemControlMessage {
 
 impl Message for AudioSystemControlMessage {}
 
+#[derive(Debug)]
+pub struct EncodedAudioBuffer(pub Vec<u8>);
+
 pub struct AudioSystem {
     endpoint: AudioSystemEndpoint,
-    notification_receiver: MessageReceiver<AudioSystemElementMessage>,
+    notification_recv: MessageReceiver<AudioSystemElementMessage>,
 
     active_audio_receiver: Option<AudioReceiverStateMachine>,
     audio_receivers: HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
@@ -53,7 +56,7 @@ impl AudioSystem {
 
         Self {
             endpoint: end,
-            notification_receiver,
+            notification_recv: notification_receiver,
 
             active_audio_receiver: None,
             audio_receivers,
@@ -65,11 +68,11 @@ impl AudioSystem {
 }
 
 fn collect_audio_receivers(
-    mut audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+    audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
     notification_sender: MessageSender<AudioSystemElementMessage>,
 ) -> HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>> {
     audio_receivers_builders
-        .drain(..)
+        .into_iter()
         .map(|mut builder| {
             builder.set_sender(notification_sender.clone());
             builder
@@ -80,11 +83,11 @@ fn collect_audio_receivers(
 }
 
 fn collect_virtual_microphones(
-    mut virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
+    virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
     notification_sender: MessageSender<AudioSystemElementMessage>,
 ) -> HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>> {
     virtual_mics_builders
-        .drain(..)
+        .into_iter()
         .map(|mut builder| {
             builder.set_sender(notification_sender.clone());
             builder
