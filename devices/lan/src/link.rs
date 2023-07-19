@@ -48,30 +48,67 @@ impl LanLink {
         })
     }
 
-    pub fn on_pong(&mut self) {
+    fn handle_ping(&mut self, flow: &mut ControlFlow) {
+        if self.ping_timer.is_time_out() {
+            self.ping();
+        }
+
+        if self.pong_timer.is_time_out() {
+            *flow = ControlFlow::Break;
+        }
+    }
+
+    fn handle_audio(&mut self) {
+        while let Some(audio) = self.audio_stream.as_mut().and_then(AudioStream::load) {
+            self.send(DeviceSystemElementMessage::EncodedAudioReceived(audio));
+        }
+    }
+
+    fn handle_device_messages(&mut self) {
+        while let Some(msg) = self.msg_stream.load() {
+            match msg {
+                DeviceMessage::Pong => self.on_pong_received(),
+                DeviceMessage::Info { info } => self.on_info_received(info),
+                DeviceMessage::AudioInfo {
+                    port,
+                    format,
+                    codec,
+                } => self.on_audio_info_received(port, format, codec),
+            }
+        }
+    }
+
+    fn ping(&mut self) {
+        self.msg_stream.store(HostMessage::Ping);
+    }
+
+    fn audio_listener_started(&mut self, port: u16) {
+        self.msg_stream.store(HostMessage::AudioListenerStarted { port });
+    }
+
+    fn on_pong_received(&self) {
         self.pong_timer.restart();
     }
 
-    pub fn on_info_received(&mut self, info: DeviceInfo) {
-        self.info.info = info;
+    fn on_info_received(&mut self, info: DeviceInfo) {
+        self.info.info = info.clone();
+        self.send(DeviceSystemElementMessage::LinkedDeviceInfo(info));
     }
 
-    pub fn on_audio_port_received(&mut self, port: u16) {
-        if let Some(audio_stream) = self.audio_stream.as_mut() {
-            let _ = self.poller.deregister_audio_stream(audio_stream);
+    fn on_audio_info_received(&mut self, port: u16, format: AudioFormat, codec: AudioCodec) {
+        if let Some(mut audio_stream) = self.audio_stream.take() {
+            let _ = self.poller.deregister_audio_stream(&mut audio_stream);
         }
 
-        let ip = self.info.addr.ip();
-        let mut audio_stream = match AudioStream::new(SocketAddr::from((ip, port))) {
-            Ok(audio_stream) => audio_stream,
-            Err(_) => {
-                self.msg_stream.store(HostMessage::GetAudioPort);
-                return;
-            }
-        };
+        self.audio_stream = AudioStream::new((self.info.addr.ip(), port).into()).ok();
+        if let Some(audio_stream) = self.audio_stream.as_mut() {
+            let _ = self.poller.register_audio_stream(audio_stream).unwrap();
 
-        let _ = self.poller.register_audio_stream(&mut audio_stream);
-        self.audio_stream = Some(audio_stream);
+            let port = audio_stream.socket().local_addr().unwrap().port();
+            self.audio_listener_started(port);
+        }
+
+        self.send(DeviceSystemElementMessage::AudioInfoReceived(format, codec));
     }
 }
 
@@ -91,34 +128,12 @@ impl Element for LanLink {
 
 impl Runnable for LanLink {
     fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
-        if self.ping_timer.is_time_out() {
-            self.msg_stream.store(HostMessage::Ping);
-        }
-
-        if self.pong_timer.is_time_out() {
-            *flow = ControlFlow::Break;
-
-            return Ok(());
-        }
+        self.handle_ping(flow);
 
         self.poller
             .poll(&mut self.msg_stream, self.audio_stream.as_mut())?;
-
-        while let Some(msg) = self.msg_stream.load() {
-            match msg {
-                DeviceMessage::Pong => self.on_pong(),
-                DeviceMessage::Info { info } => self.on_info_received(info),
-                DeviceMessage::AudioPort { port } => self.on_audio_port_received(port),
-            }
-        }
-
-        while let Some(audio) = self
-            .audio_stream
-            .as_mut()
-            .and_then(|audio_stream| audio_stream.load())
-        {
-            self.send(DeviceSystemElementMessage::EncodedAudioReceived(audio));
-        }
+        self.handle_audio();
+        self.handle_device_messages();
 
         Ok(())
     }

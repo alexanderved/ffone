@@ -27,8 +27,31 @@ pub enum AudioSystemControlMessage {
 
 impl Message for AudioSystemControlMessage {}
 
-#[derive(Debug)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct EncodedAudioBuffer(pub Vec<u8>);
+
+#[repr(i8)]
+#[derive(Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
+pub enum AudioFormat {
+    Rtp,
+    MpegTS,
+    Ogg,
+    Flv,
+    #[default]
+    Unspecified,
+}
+
+#[repr(i8)]
+#[derive(Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
+pub enum AudioCodec {
+    AAC,
+    Opus,
+    Vorbis,
+    #[default]
+    Unspecified,
+}
 
 pub struct AudioSystem {
     endpoint: AudioSystemEndpoint,

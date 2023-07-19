@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::audio_system::AudioCodec;
+use crate::audio_system::AudioFormat;
 use crate::audio_system::EncodedAudioBuffer;
 use crate::error;
 use crate::util::*;
@@ -11,9 +13,12 @@ pub enum DeviceSystemElementMessage {
     NewDevicesDiscovered(Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>),
     DeviceUnreachable(DeviceInfo),
 
-    DeviceUnlinked,
+    LinkedDeviceInfo(DeviceInfo),
 
     EncodedAudioReceived(EncodedAudioBuffer),
+    AudioInfoReceived(AudioFormat, AudioCodec),
+
+    DeviceUnlinked,
 
     Error(error::Error),
 }

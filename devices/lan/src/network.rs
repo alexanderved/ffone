@@ -137,7 +137,7 @@ pub(super) trait ReadNetworkPacket: Read {
         }
 
         let size = NetworkPacket::read_size_from_header(&header);
-        
+
         let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
         bytes[..NetworkPacket::HEADER_LEN].clone_from_slice(&header);
 
@@ -163,7 +163,7 @@ pub(super) trait WriteNetworkPacket: Write {
 
             bytes_written += n;
         }
-
+        
         Ok(())
     }
 }
@@ -188,7 +188,6 @@ fn read_data<R: Read>(mut r: R, slice: &mut [u8]) -> error::Result<()> {
             Ok(0) => return Err(error::Error::DeviceUnlinked),
             Ok(n) => n,
             Err(err) if err.kind() == io::ErrorKind::WouldBlock && started_reading => continue,
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => break,
             Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
             Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
             Err(err) => return Err(err.into()),
@@ -197,6 +196,6 @@ fn read_data<R: Read>(mut r: R, slice: &mut [u8]) -> error::Result<()> {
         started_reading = true;
         len += n;
     }
-    
+
     Ok(())
 }

@@ -6,7 +6,10 @@ mod message_stream;
 mod network;
 mod poller;
 
-use core::device::DeviceInfo;
+use core::{
+    audio_system::{AudioCodec, AudioFormat},
+    device::DeviceInfo,
+};
 
 use std::net::SocketAddr;
 
@@ -34,7 +37,11 @@ impl LanDeviceInfo {
 #[serde(tag = "type")]
 pub enum HostMessage {
     Ping,
-    GetAudioPort,
+    Empty,
+
+    AudioListenerStarted {
+        port: u16
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -43,6 +50,12 @@ pub enum HostMessage {
 pub enum DeviceMessage {
     Pong,
 
-    Info { info: DeviceInfo },
-    AudioPort { port: u16 },
+    Info {
+        info: DeviceInfo,
+    },
+    AudioInfo {
+        port: u16,
+        format: AudioFormat,
+        codec: AudioCodec,
+    },
 }

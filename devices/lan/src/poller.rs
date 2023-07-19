@@ -16,7 +16,7 @@ impl Poller {
     pub(super) fn new() -> error::Result<Self> {
         Ok(Self {
             poll: Poll::new()?,
-            events: Events::with_capacity(32),
+            events: Events::with_capacity(128),
         })
     }
 
@@ -27,7 +27,7 @@ impl Poller {
         self.poll.registry().register(
             msg_stream.socket_mut(),
             MESSAGE,
-            Interest::READABLE | Interest::WRITABLE,
+            Interest::READABLE,
         )?;
 
         Ok(())
@@ -67,6 +67,8 @@ impl Poller {
         message_stream: &mut MessageStream,
         mut audio_stream: Option<&mut AudioStream>,
     ) -> error::Result<()> {
+        let _ = message_stream.send_from_buf();
+
         self.poll
             .poll(&mut self.events, Some(Duration::from_millis(0)))?;
         for e in self.events.iter() {
@@ -75,18 +77,13 @@ impl Poller {
                     if e.is_readable() {
                         let _ = message_stream.recv_to_buf();
                     }
-
-                    if e.is_writable() {
-                        let _ = message_stream.send_from_buf();
-                    }
                 }
                 AUDIO => {
-                    let audio_stream = match &mut audio_stream {
-                        Some(audio_stream) => &mut **audio_stream,
-                        None => continue,
-                    };
-
                     if e.is_readable() {
+                        let Some(audio_stream) = audio_stream.as_deref_mut() else {
+                            continue;
+                        };
+
                         audio_stream.recv_to_buf();
                     }
                 }

@@ -25,6 +25,7 @@ impl AudioStream {
         })
     }
 
+    #[allow(dead_code)]
     pub(super) fn socket(&self) -> &UdpSocket {
         &self.socket
     }
