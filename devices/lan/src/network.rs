@@ -34,7 +34,7 @@ impl NetworkPacket {
     where
         D: for<'de> serde::Deserialize<'de>,
     {
-        Ok(serde_json::from_slice(&self.0[Self::HEADER_LEN..])?)
+        Ok(serde_json::from_slice(&self.bytes()[Self::HEADER_LEN..])?)
     }
 
     pub(super) fn is_header_correct(header: &[u8]) -> bool {
@@ -127,63 +127,48 @@ impl UdpSocketExt for std::net::UdpSocket {
     }
 }
 
-pub(super) trait TcpStreamExt {
-    fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize>;
-    fn recv_packet(&mut self) -> error::Result<NetworkPacket>;
-}
-
-impl<S: Read + Write> TcpStreamExt for S {
-    fn send_packet(&mut self, packet: &NetworkPacket) -> error::Result<usize> {
-        Ok(self.write(&packet.0)?)
-    }
-
-    fn recv_packet(&mut self) -> error::Result<NetworkPacket> {
-        let mut started_reading = false;
-
+pub(super) trait ReadNetworkPacket: Read {
+    fn read_packet(&mut self) -> error::Result<NetworkPacket> {
         let mut header = [0u8; NetworkPacket::HEADER_LEN];
-        let mut header_len = 0;
-        while header_len < NetworkPacket::HEADER_LEN {
-            let n = match self.read(&mut header[header_len..]) {
-                Ok(0) => return Err(error::Error::DeviceUnlinked),
-                Ok(n) => n,
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock && started_reading => continue,
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => break,
-                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-                Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
-                Err(err) => return Err(err.into()),
-            };
-
-            started_reading = true;
-            header_len += n;
-        }
+        read_data(&mut *self, &mut header)?;
 
         if !NetworkPacket::is_header_correct(&header) {
             return Err(error::Error::WrongNetworkPacketHeader);
         }
 
-        let size = NetworkPacket::read_size_from_header(&header[..header_len]);
+        let size = NetworkPacket::read_size_from_header(&header);
+        
         let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
         bytes[..NetworkPacket::HEADER_LEN].clone_from_slice(&header);
 
-        let mut packet_len = NetworkPacket::HEADER_LEN;
-        while packet_len < NetworkPacket::HEADER_LEN + size {
-            let n = match self.read(&mut bytes[packet_len..]) {
-                Ok(0) => return Err(error::Error::DeviceUnlinked),
-                Ok(n) => n,
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,
-                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-                Err(err) if is_io_error_critical(&err) => {
-                    return Err(error::Error::DeviceUnlinked);
-                }
-                Err(err) => return Err(err.into()),
-            };
-
-            packet_len += n;
-        }
+        read_data(self, &mut bytes[NetworkPacket::HEADER_LEN..])?;
 
         Ok(NetworkPacket(bytes))
     }
 }
+
+impl<R: Read> ReadNetworkPacket for R {}
+
+pub(super) trait WriteNetworkPacket: Write {
+    fn write_packet(&mut self, packet: &NetworkPacket) -> error::Result<()> {
+        let mut bytes_written = 0;
+        while bytes_written < packet.len() {
+            let n = match self.write(&packet.0) {
+                Ok(n) => n,
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
+                Err(err) => return Err(err.into()),
+            };
+
+            bytes_written += n;
+        }
+
+        Ok(())
+    }
+}
+
+impl<W: Write> WriteNetworkPacket for W {}
 
 pub(super) fn is_io_error_critical(err: &io::Error) -> bool {
     matches!(
@@ -193,4 +178,25 @@ pub(super) fn is_io_error_critical(err: &io::Error) -> bool {
             | io::ErrorKind::BrokenPipe
             | io::ErrorKind::UnexpectedEof
     )
+}
+
+fn read_data<R: Read>(mut r: R, slice: &mut [u8]) -> error::Result<()> {
+    let mut started_reading = false;
+    let mut len = 0;
+    while len < slice.len() {
+        let n = match r.read(&mut slice[len..]) {
+            Ok(0) => return Err(error::Error::DeviceUnlinked),
+            Ok(n) => n,
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock && started_reading => continue,
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => break,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+            Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
+            Err(err) => return Err(err.into()),
+        };
+
+        started_reading = true;
+        len += n;
+    }
+    
+    Ok(())
 }

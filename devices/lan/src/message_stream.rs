@@ -4,7 +4,7 @@ use super::{DeviceMessage, HostMessage};
 use core::error;
 
 use std::collections::VecDeque;
-use std::io::{self, Write};
+use std::io;
 use std::net::SocketAddr;
 
 use mio::net::*;
@@ -39,21 +39,8 @@ impl MessageStream {
                 continue;
             };
 
-            match self.socket.send_packet(&packet) {
-                Ok(n) => {
-                    let mut bytes_written = n;
-                    while bytes_written < packet.len() {
-                        let n = match self.socket.write(&packet.bytes()[bytes_written..]) {
-                            Ok(n) => n,
-                            Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,
-                            Err(err) if is_io_error_critical(&err) => {
-                                return Err(error::Error::DeviceUnlinked);
-                            }
-                            Err(err) => return Err(error::Error::Io(err)),
-                        };
-                        bytes_written += n;
-                    }
-                }
+            match self.socket.write_packet(&packet) {
+                Ok(()) => {}
                 Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::WouldBlock => {
                     self.sent_messages.push_front(host_msg);
                     break;
@@ -74,7 +61,7 @@ impl MessageStream {
 
     pub(super) fn recv_to_buf(&mut self) -> error::Result<()> {
         loop {
-            let packet = match self.socket.recv_packet() {
+            let packet = match self.socket.read_packet() {
                 Ok(packet) => packet,
                 Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::WouldBlock => break,
                 Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::Interrupted => continue,
