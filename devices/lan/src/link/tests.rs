@@ -30,7 +30,7 @@ impl FakeDevice {
 
     fn new(
         name: &str,
-        recv: MessageReceiver<StopDevice>, 
+        recv: MessageReceiver<StopDevice>,
         port: u16,
         audio_port: u16,
     ) -> error::Result<Self> {
@@ -80,14 +80,14 @@ impl Runnable for FakeDevice {
 
         let packet = msg_stream.read_packet()?;
         let msg = packet.deserialize()?;
-        
+
         let packet = match msg {
             HostMessage::Ping => NetworkPacket::serialize(&DeviceMessage::Pong),
             HostMessage::AudioListenerStarted { port } => {
                 let ip = msg_stream.peer_addr().unwrap().ip();
                 self.audio_listener_addr = Some((ip, port).into());
-                return Ok(())
-            },
+                return Ok(());
+            }
             _ => return Ok(()),
         };
 
@@ -116,7 +116,7 @@ impl Runnable for FakeDevice {
 fn run_device(
     name: &str,
     port: u16,
-    audio_port: u16
+    audio_port: u16,
 ) -> error::Result<(MessageSender<StopDevice>, JoinHandle<()>)> {
     let (device_send, device_recv) = unidirectional_queue();
     let mut device = FakeDevice::new(name, device_recv, port, audio_port)?;

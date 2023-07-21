@@ -66,7 +66,6 @@ impl std::convert::AsRef<[u8]> for NetworkPacket {
 pub(super) trait UdpSocketExt {
     fn send_packet_to(&self, addr: SocketAddr, packet: &NetworkPacket) -> error::Result<usize>;
     fn recv_packet_from(&self) -> error::Result<(NetworkPacket, SocketAddr)>;
-    fn has_pending_packet_from(&self) -> bool;
 }
 
 impl UdpSocketExt for mio::net::UdpSocket {
@@ -89,12 +88,6 @@ impl UdpSocketExt for mio::net::UdpSocket {
         let (_, sender_addr) = self.recv_from(&mut bytes)?;
 
         Ok((NetworkPacket(bytes), sender_addr))
-    }
-
-    fn has_pending_packet_from(&self) -> bool {
-        let mut header = [0u8; NetworkPacket::HEADER_PREFIX_LEN];
-        self.peek_from(&mut header)
-            .is_ok_and(|(n, _)| NetworkPacket::is_header_correct(&header[..n]))
     }
 }
 
@@ -119,18 +112,12 @@ impl UdpSocketExt for std::net::UdpSocket {
 
         Ok((NetworkPacket(bytes), sender_addr))
     }
-
-    fn has_pending_packet_from(&self) -> bool {
-        let mut header = [0u8; NetworkPacket::HEADER_PREFIX_LEN];
-        self.peek_from(&mut header)
-            .is_ok_and(|(n, _)| NetworkPacket::is_header_correct(&header[..n]))
-    }
 }
 
 pub(super) trait ReadNetworkPacket: Read {
     fn read_packet(&mut self) -> error::Result<NetworkPacket> {
         let mut header = [0u8; NetworkPacket::HEADER_LEN];
-        read_data(&mut *self, &mut header)?;
+        read_data(&mut *self, &mut header, false)?;
 
         if !NetworkPacket::is_header_correct(&header) {
             return Err(error::Error::WrongNetworkPacketHeader);
@@ -141,7 +128,7 @@ pub(super) trait ReadNetworkPacket: Read {
         let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
         bytes[..NetworkPacket::HEADER_LEN].clone_from_slice(&header);
 
-        read_data(self, &mut bytes[NetworkPacket::HEADER_LEN..])?;
+        read_data(self, &mut bytes[NetworkPacket::HEADER_LEN..], true)?;
 
         Ok(NetworkPacket(bytes))
     }
@@ -155,7 +142,9 @@ pub(super) trait WriteNetworkPacket: Write {
         while bytes_written < packet.len() {
             let n = match self.write(&packet.0) {
                 Ok(n) => n,
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock && bytes_written > 0 => {
+                    continue
+                }
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
                 Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
                 Err(err) => return Err(err.into()),
@@ -163,7 +152,7 @@ pub(super) trait WriteNetworkPacket: Write {
 
             bytes_written += n;
         }
-        
+
         Ok(())
     }
 }
@@ -180,20 +169,27 @@ pub(super) fn is_io_error_critical(err: &io::Error) -> bool {
     )
 }
 
-fn read_data<R: Read>(mut r: R, slice: &mut [u8]) -> error::Result<()> {
-    let mut started_reading = false;
+fn read_data<R: Read>(
+    mut r: R,
+    slice: &mut [u8],
+    continue_on_would_block: bool,
+) -> error::Result<()> {
     let mut len = 0;
     while len < slice.len() {
         let n = match r.read(&mut slice[len..]) {
             Ok(0) => return Err(error::Error::DeviceUnlinked),
             Ok(n) => n,
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock && started_reading => continue,
+            Err(err)
+                if err.kind() == io::ErrorKind::WouldBlock
+                    && (len > 0 || continue_on_would_block) =>
+            {
+                continue;
+            }
             Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
             Err(err) if is_io_error_critical(&err) => return Err(error::Error::DeviceUnlinked),
             Err(err) => return Err(err.into()),
         };
 
-        started_reading = true;
         len += n;
     }
 

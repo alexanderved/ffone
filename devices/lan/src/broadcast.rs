@@ -4,6 +4,7 @@ use super::*;
 use core::error;
 
 use std::collections::HashSet;
+use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
@@ -55,19 +56,23 @@ impl UdpBroadcastListener {
     pub(super) fn recv(&mut self) -> error::Result<impl Iterator<Item = LanDeviceInfo> + 'static> {
         let mut lan_infos = HashSet::new();
         self.poll
-            .poll(&mut self.events, Some(Duration::from_micros(0)))?;
+            .poll(&mut self.events, Some(Duration::from_millis(0)))?;
 
         for e in self.events.iter() {
             if e.token() != IDENTITY_RECEIVABLE {
                 continue;
             }
 
-            while self.socket.has_pending_packet_from() {
-                let Ok(lan_info) = recv_device_info(&self.socket) else {
-                    continue;
-                };
-
-                lan_infos.insert(lan_info);
+            loop {
+                match recv_device_info(&self.socket) {
+                    Ok(lan_info) => {
+                        lan_infos.insert(lan_info);
+                    }
+                    Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::WouldBlock => {
+                        break;
+                    }
+                    Err(_) => continue,
+                }
             }
         }
 

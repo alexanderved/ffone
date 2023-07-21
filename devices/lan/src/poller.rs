@@ -24,11 +24,9 @@ impl Poller {
         &mut self,
         msg_stream: &mut MessageStream,
     ) -> error::Result<()> {
-        self.poll.registry().register(
-            msg_stream.socket_mut(),
-            MESSAGE,
-            Interest::READABLE,
-        )?;
+        self.poll
+            .registry()
+            .register(msg_stream.socket_mut(), MESSAGE, Interest::READABLE)?;
 
         Ok(())
     }
@@ -87,7 +85,7 @@ impl Poller {
                         audio_stream.recv_to_buf();
                     }
                 }
-                _ => {}
+                _ => unreachable!()
             }
         }
 

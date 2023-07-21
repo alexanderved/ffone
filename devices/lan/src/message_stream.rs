@@ -40,7 +40,7 @@ impl MessageStream {
             };
 
             match self.socket.write_packet(&packet) {
-                Ok(()) => {}
+                Ok(()) => continue,
                 Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::WouldBlock => {
                     self.sent_messages.push_front(host_msg);
                     break;

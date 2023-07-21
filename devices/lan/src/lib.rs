@@ -39,9 +39,7 @@ pub enum HostMessage {
     Ping,
     Empty,
 
-    AudioListenerStarted {
-        port: u16
-    },
+    AudioListenerStarted { port: u16 },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

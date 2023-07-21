@@ -83,7 +83,8 @@ impl LanLink {
     }
 
     fn audio_listener_started(&mut self, port: u16) {
-        self.msg_stream.store(HostMessage::AudioListenerStarted { port });
+        self.msg_stream
+            .store(HostMessage::AudioListenerStarted { port });
     }
 
     fn on_pong_received(&self) {
