@@ -1,5 +1,5 @@
-use super::audio_receiver::*;
 use super::element::*;
+use super::RawAudioBuffer;
 use crate::util::RunnableStateMachine;
 
 pub type VirtualMicrophoneStateMachine = RunnableStateMachine<Box<dyn VirtualMicrophone>>;
@@ -9,7 +9,7 @@ pub struct VirtualMicrophoneInfo {
     name: String,
 }
 
-pub trait VirtualMicrophone: AudioSink<AudioRawData> {
+pub trait VirtualMicrophone: AudioSink<RawAudioBuffer> {
     fn info(&self) -> VirtualMicrophoneInfo;
 }
 

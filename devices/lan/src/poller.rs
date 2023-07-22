@@ -85,7 +85,7 @@ impl Poller {
                         audio_stream.recv_to_buf();
                     }
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
 

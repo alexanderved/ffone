@@ -1,8 +1,8 @@
-pub mod audio_receiver;
+pub mod audio_decoder;
 pub mod element;
 pub mod virtual_microphone;
 
-use audio_receiver::*;
+use audio_decoder::*;
 use element::*;
 use virtual_microphone::*;
 
@@ -53,12 +53,16 @@ pub enum AudioCodec {
     Unspecified,
 }
 
+pub struct RawAudioBuffer(pub Vec<u8>);
+
+impl Message for RawAudioBuffer {}
+
 pub struct AudioSystem {
     endpoint: AudioSystemEndpoint,
     notification_recv: MessageReceiver<AudioSystemElementMessage>,
 
-    active_audio_receiver: Option<AudioReceiverStateMachine>,
-    audio_receivers: HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
+    active_audio_dec: Option<AudioDecoderStateMachine>,
+    audio_decs: HashMap<AudioDecoderInfo, Box<dyn AudioDecoder>>,
 
     active_virtual_mic: Option<VirtualMicrophoneStateMachine>,
     virtual_mics: HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
@@ -67,13 +71,12 @@ pub struct AudioSystem {
 impl AudioSystem {
     pub fn new(
         end: AudioSystemEndpoint,
-        audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+        audio_decs_builders: Vec<Box<dyn AudioDecoderBuilder>>,
         virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
     ) -> Self {
         let (notification_sender, notification_receiver) = unidirectional_queue();
 
-        let audio_receivers =
-            collect_audio_receivers(audio_receivers_builders, notification_sender.clone());
+        let audio_decs = collect_audio_decs(audio_decs_builders, notification_sender.clone());
         let virtual_mics =
             collect_virtual_microphones(virtual_mics_builders, notification_sender.clone());
 
@@ -81,8 +84,8 @@ impl AudioSystem {
             endpoint: end,
             notification_recv: notification_receiver,
 
-            active_audio_receiver: None,
-            audio_receivers,
+            active_audio_dec: None,
+            audio_decs,
 
             active_virtual_mic: None,
             virtual_mics,
@@ -90,18 +93,18 @@ impl AudioSystem {
     }
 }
 
-fn collect_audio_receivers(
-    audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+fn collect_audio_decs(
+    audio_decs_builders: Vec<Box<dyn AudioDecoderBuilder>>,
     notification_sender: MessageSender<AudioSystemElementMessage>,
-) -> HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>> {
-    audio_receivers_builders
+) -> HashMap<AudioDecoderInfo, Box<dyn AudioDecoder>> {
+    audio_decs_builders
         .into_iter()
         .map(|mut builder| {
             builder.set_sender(notification_sender.clone());
             builder
         })
         .filter_map(|builder| builder.build().ok())
-        .map(|audio_recv| (audio_recv.info(), audio_recv))
+        .map(|audio_dec| (audio_dec.info(), audio_dec))
         .collect()
 }
 
@@ -149,32 +152,32 @@ impl Runnable for AudioSystem {
     }
 
     fn on_start(&mut self) -> error::Result<()> {
-        self.active_audio_receiver = Some(choose_best_audio_receiver(&mut self.audio_receivers));
+        self.active_audio_dec = Some(choose_best_audio_decoder(&mut self.audio_decs));
         self.active_virtual_mic = Some(choose_best_virtual_microphone(&mut self.virtual_mics));
 
         Ok(())
     }
 }
 
-fn choose_best_audio_receiver(
-    audio_receivers: &mut HashMap<AudioReceiverInfo, Box<dyn AudioReceiver>>,
-) -> AudioReceiverStateMachine {
-    let mut active_audio_receiver = None;
-    let filtered_audio_receivers = audio_receivers
+fn choose_best_audio_decoder(
+    audio_decs: &mut HashMap<AudioDecoderInfo, Box<dyn AudioDecoder>>,
+) -> AudioDecoderStateMachine {
+    let mut active_audio_dec = None;
+    let filtered_audio_decs = audio_decs
         .drain()
-        .filter_map(|(info, recv)| {
-            RunnableStateMachine::new_running(recv).map_or_else(
-                |(recv, _)| Some((info, recv)),
+        .filter_map(|(info, audio_dec)| {
+            RunnableStateMachine::new_running(audio_dec).map_or_else(
+                |(audio_dec, _)| Some((info, audio_dec)),
                 |machine| {
-                    active_audio_receiver = Some(machine);
+                    active_audio_dec = Some(machine);
                     None
                 },
             )
         })
         .collect::<HashMap<_, _>>();
-    *audio_receivers = filtered_audio_receivers;
+    *audio_decs = filtered_audio_decs;
 
-    active_audio_receiver.expect("No suitable audio receivers were provided")
+    active_audio_dec.expect("No suitable audio receivers were provided")
 }
 
 fn choose_best_virtual_microphone(
@@ -201,7 +204,7 @@ fn choose_best_virtual_microphone(
 pub struct AudioSystemBuilder {
     end: Option<AudioSystemEndpoint>,
 
-    audio_receivers_builders: Vec<Box<dyn AudioReceiverBuilder>>,
+    audio_decs_builders: Vec<Box<dyn AudioDecoderBuilder>>,
     virtual_mics_builders: Vec<Box<dyn VirtualMicrophoneBuilder>>,
 }
 
@@ -210,13 +213,13 @@ impl AudioSystemBuilder {
         Self {
             end: None,
 
-            audio_receivers_builders: vec![],
+            audio_decs_builders: vec![],
             virtual_mics_builders: vec![],
         }
     }
 
-    pub fn add_audio_receiver<B: AudioReceiverBuilder + 'static>(mut self, builder: B) -> Self {
-        self.audio_receivers_builders.push(Box::new(builder));
+    pub fn add_audio_dec<B: AudioDecoderBuilder + 'static>(mut self, builder: B) -> Self {
+        self.audio_decs_builders.push(Box::new(builder));
         self
     }
 
@@ -239,14 +242,14 @@ impl ComponentBuilder for AudioSystemBuilder {
     fn build(self: Box<Self>) -> error::Result<Box<Self::Component>> {
         let Self {
             end,
-            audio_receivers_builders,
+            audio_decs_builders,
             virtual_mics_builders,
         } = *self;
         let end = end.expect("An audio system endpoint wasn't provided");
 
         Ok(Box::new(AudioSystem::new(
             end,
-            audio_receivers_builders,
+            audio_decs_builders,
             virtual_mics_builders,
         )))
     }
