@@ -1,8 +1,7 @@
 use super::*;
 
-use crate::audio_system::AudioCodec;
-use crate::audio_system::AudioFormat;
-use crate::audio_system::EncodedAudioBuffer;
+use crate::audio_system::audio::EncodedAudioBuffer;
+use crate::audio_system::audio::EncodedAudioInfo;
 use crate::error;
 use crate::util::*;
 
@@ -16,7 +15,7 @@ pub enum DeviceSystemElementMessage {
     LinkedDeviceInfo(DeviceInfo),
 
     EncodedAudioReceived(EncodedAudioBuffer),
-    AudioInfoReceived(AudioFormat, AudioCodec),
+    AudioInfoReceived(EncodedAudioInfo),
 
     DeviceUnlinked,
 
@@ -25,7 +24,7 @@ pub enum DeviceSystemElementMessage {
 
 impl Message for DeviceSystemElementMessage {}
 
-crate::trait_alias!(pub DeviceSystemElement:
+crate::trait_alias!(@upcast AsDeviceSystemElement pub DeviceSystemElement:
     Element<Message = DeviceSystemElementMessage> + Runnable);
 crate::impl_as_trait!(device_system_element -> DeviceSystemElement);
 

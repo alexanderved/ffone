@@ -1,10 +1,13 @@
+pub mod audio;
 pub mod audio_decoder;
 pub mod element;
 pub mod virtual_microphone;
+mod sync;
 
 use audio_decoder::*;
 use element::*;
 use virtual_microphone::*;
+use sync::*;
 
 use crate::util::*;
 use crate::*;
@@ -26,36 +29,6 @@ pub enum AudioSystemControlMessage {
 }
 
 impl Message for AudioSystemControlMessage {}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct EncodedAudioBuffer(pub Vec<u8>);
-
-#[repr(i8)]
-#[derive(Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type")]
-pub enum AudioFormat {
-    Rtp,
-    MpegTS,
-    Ogg,
-    Flv,
-    #[default]
-    Unspecified,
-}
-
-#[repr(i8)]
-#[derive(Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type")]
-pub enum AudioCodec {
-    AAC,
-    Opus,
-    Vorbis,
-    #[default]
-    Unspecified,
-}
-
-pub struct RawAudioBuffer(pub Vec<u8>);
-
-impl Message for RawAudioBuffer {}
 
 pub struct AudioSystem {
     endpoint: AudioSystemEndpoint,
@@ -155,7 +128,7 @@ impl Runnable for AudioSystem {
         self.active_audio_dec = Some(choose_best_audio_decoder(&mut self.audio_decs));
         self.active_virtual_mic = Some(choose_best_virtual_microphone(&mut self.virtual_mics));
 
-        Ok(())
+        todo!("Chain the audio decoder and the virtual mic")
     }
 }
 

@@ -59,32 +59,31 @@ impl LanLink {
     }
 
     fn handle_audio(&mut self) {
-        while let Some(audio) = self.audio_stream.as_mut().and_then(AudioStream::load) {
+        while let Some(audio) = self.audio_stream.as_mut().and_then(AudioStream::pull) {
             self.send(DeviceSystemElementMessage::EncodedAudioReceived(audio));
         }
     }
 
     fn handle_device_messages(&mut self) {
-        while let Some(msg) = self.msg_stream.load() {
+        while let Some(msg) = self.msg_stream.pull() {
             match msg {
                 DeviceMessage::Pong => self.on_pong_received(),
                 DeviceMessage::Info { info } => self.on_info_received(info),
-                DeviceMessage::AudioInfo {
-                    port,
-                    format,
-                    codec,
-                } => self.on_audio_info_received(port, format, codec),
+                DeviceMessage::StartAudioListener { port, info } => {
+                    self.on_start_audio_listener(port, info)
+                }
+                DeviceMessage::StopAudioListener => self.on_stop_audio_listener(),
             }
         }
     }
 
     fn ping(&mut self) {
-        self.msg_stream.store(HostMessage::Ping);
+        self.msg_stream.push(HostMessage::Ping);
     }
 
     fn audio_listener_started(&mut self, port: u16) {
         self.msg_stream
-            .store(HostMessage::AudioListenerStarted { port });
+            .push(HostMessage::AudioListenerStarted { port });
     }
 
     fn on_pong_received(&self) {
@@ -96,7 +95,7 @@ impl LanLink {
         self.send(DeviceSystemElementMessage::LinkedDeviceInfo(info));
     }
 
-    fn on_audio_info_received(&mut self, port: u16, format: AudioFormat, codec: AudioCodec) {
+    fn on_start_audio_listener(&mut self, port: u16, info: EncodedAudioInfo) {
         if let Some(mut audio_stream) = self.audio_stream.take() {
             let _ = self.poller.deregister_audio_stream(&mut audio_stream);
         }
@@ -109,7 +108,13 @@ impl LanLink {
             self.audio_listener_started(port);
         }
 
-        self.send(DeviceSystemElementMessage::AudioInfoReceived(format, codec));
+        self.send(DeviceSystemElementMessage::AudioInfoReceived(info));
+    }
+
+    fn on_stop_audio_listener(&mut self) {
+        if let Some(mut audio_stream) = self.audio_stream.take() {
+            let _ = self.poller.deregister_audio_stream(&mut audio_stream);
+        }
     }
 }
 

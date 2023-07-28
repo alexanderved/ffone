@@ -77,11 +77,11 @@ impl MessageStream {
         Ok(())
     }
 
-    pub(super) fn store(&mut self, host_msg: HostMessage) {
+    pub(super) fn push(&mut self, host_msg: HostMessage) {
         self.sent_messages.push_back(host_msg);
     }
 
-    pub(super) fn load(&mut self) -> Option<DeviceMessage> {
+    pub(super) fn pull(&mut self) -> Option<DeviceMessage> {
         self.received_messages.pop_front()
     }
 }

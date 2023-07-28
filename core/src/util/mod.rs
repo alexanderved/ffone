@@ -136,10 +136,10 @@ macro_rules! impl_as_trait {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! trait_alias {
-    ($vis:vis $alias:ident : $( $trait:tt )*) => {
-        $vis trait $alias: $( $trait )* {}
+    ( $( @upcast $upcast:ident )? $vis:vis $alias:ident : $( $trait:tt )*) => {
+        $vis trait $alias: $( $trait )* $( + $upcast )? {}
 
-        impl<T: $( $trait )* + ?Sized> $alias for T {}
+        impl<T: $( $trait )*> $alias for T {}
     };
 }
 

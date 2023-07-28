@@ -1,4 +1,4 @@
-use core::{audio_system::EncodedAudioBuffer, error};
+use core::{audio_system::audio::EncodedAudioBuffer, error};
 use mio::net::*;
 use std::{
     collections::VecDeque,
@@ -42,7 +42,7 @@ impl AudioStream {
         }
     }
 
-    pub(super) fn load(&mut self) -> Option<EncodedAudioBuffer> {
+    pub(super) fn pull(&mut self) -> Option<EncodedAudioBuffer> {
         self.received_audio.pop_front()
     }
 }

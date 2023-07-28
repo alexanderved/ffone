@@ -1,5 +1,5 @@
+use super::audio::RawAudioBuffer;
 use super::element::*;
-use super::RawAudioBuffer;
 use crate::util::RunnableStateMachine;
 
 pub type VirtualMicrophoneStateMachine = RunnableStateMachine<Box<dyn VirtualMicrophone>>;

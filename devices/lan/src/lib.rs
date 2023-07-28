@@ -6,10 +6,7 @@ mod message_stream;
 mod network;
 mod poller;
 
-use core::{
-    audio_system::{AudioCodec, AudioFormat},
-    device::DeviceInfo,
-};
+use core::{audio_system::audio::EncodedAudioInfo, device::DeviceInfo};
 
 use std::net::SocketAddr;
 
@@ -48,12 +45,7 @@ pub enum HostMessage {
 pub enum DeviceMessage {
     Pong,
 
-    Info {
-        info: DeviceInfo,
-    },
-    AudioInfo {
-        port: u16,
-        format: AudioFormat,
-        codec: AudioCodec,
-    },
+    Info { info: DeviceInfo },
+    StartAudioListener { port: u16, info: EncodedAudioInfo },
+    StopAudioListener,
 }

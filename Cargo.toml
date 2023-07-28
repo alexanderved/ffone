@@ -10,8 +10,14 @@ core = { package = "ffone_core", version = "0.1.0", path = "core" }
 crossbeam-utils = "0.8.16"
 lan_device = { package = "ffone_lan_device", version = "0.1.0", path = "devices/lan" }
 
+[dependencies.gstreamer]
+package = "ffone_gst_audio_decoder"
+version = "0.1.0"
+path = "audio_decoders/gstreamer"
+
 [workspace]
 members = [
     "core",
     "devices/lan",
+    "audio_decoders/gstreamer"
 ]

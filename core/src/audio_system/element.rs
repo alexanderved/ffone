@@ -10,8 +10,8 @@ pub enum AudioSystemElementMessage {
 
 impl Message for AudioSystemElementMessage {}
 
-trait_alias!(pub AudioSystemElement:
-    Element<Message = AudioSystemElementMessage> + Runnable + AsAudioSystemElement);
+trait_alias!(@upcast AsAudioSystemElement pub AudioSystemElement:
+    Element<Message = AudioSystemElementMessage> + Runnable);
 
 impl_as_trait!(audio_system_element -> AudioSystemElement);
 

@@ -3,7 +3,7 @@
 use super::*;
 use crate::network::*;
 
-use core::audio_system::EncodedAudioBuffer;
+use core::audio_system::audio::{AudioCodec, AudioFormat, EncodedAudioBuffer};
 use core::util::RunnableStateMachine;
 use std::net::{Ipv4Addr, TcpListener, TcpStream, UdpSocket};
 use std::thread::{self, JoinHandle};
@@ -25,8 +25,9 @@ struct FakeDevice {
 }
 
 impl FakeDevice {
-    const AUDIO_FORMAT: AudioFormat = AudioFormat::Rtp;
+    const AUDIO_FORMAT: AudioFormat = AudioFormat::MpegTS;
     const AUDIO_CODEC: AudioCodec = AudioCodec::Opus;
+    const AUDIO_SAMPLE_RATE: u32 = 44100;
 
     fn new(
         name: &str,
@@ -101,11 +102,16 @@ impl Runnable for FakeDevice {
         msg_stream.set_nonblocking(true)?;
         msg_stream.set_nodelay(true)?;
 
-        msg_stream.write_packet(&NetworkPacket::serialize(&DeviceMessage::AudioInfo {
-            port: self.audio_port(),
-            format: Self::AUDIO_FORMAT,
-            codec: Self::AUDIO_CODEC,
-        })?)?;
+        msg_stream.write_packet(&NetworkPacket::serialize(
+            &DeviceMessage::StartAudioListener {
+                port: self.audio_port(),
+                info: EncodedAudioInfo {
+                    format: Self::AUDIO_FORMAT,
+                    codec: Self::AUDIO_CODEC,
+                    sample_rate: Self::AUDIO_SAMPLE_RATE,
+                },
+            },
+        )?)?;
 
         self.msg_stream = Some(msg_stream);
 
@@ -175,13 +181,15 @@ fn test_on_audio_info_received() -> error::Result<()> {
     let (device_send, device_handle) = run_device("fake", device_port, 31710)?;
     let (mut link, link_recv) = create_link(device_port)?;
 
-    let mut format = AudioFormat::Unspecified;
-    let mut codec = AudioCodec::Unspecified;
+    let mut info = EncodedAudioInfo {
+        format: AudioFormat::Unspecified,
+        codec: AudioCodec::Unspecified,
+        sample_rate: 0,
+    };
     let mut port = 0;
     while let Some(_) = link.proceed() {
-        if let Some(DeviceSystemElementMessage::AudioInfoReceived(f, c)) = link_recv.recv() {
-            format = f;
-            codec = c;
+        if let Some(DeviceSystemElementMessage::AudioInfoReceived(i)) = link_recv.recv() {
+            info = i;
             if let Some(audio_stream) = link.as_runnable().audio_stream.as_ref() {
                 port = audio_stream.socket().peer_addr().map_or(0, |a| a.port());
             }
@@ -191,8 +199,9 @@ fn test_on_audio_info_received() -> error::Result<()> {
     }
     link.stop()?;
 
-    assert_eq!(format, FakeDevice::AUDIO_FORMAT);
-    assert_eq!(codec, FakeDevice::AUDIO_CODEC);
+    assert_eq!(info.format, FakeDevice::AUDIO_FORMAT);
+    assert_eq!(info.codec, FakeDevice::AUDIO_CODEC);
+    assert_eq!(info.sample_rate, FakeDevice::AUDIO_SAMPLE_RATE);
     assert_eq!(port, 31710);
 
     stop_device((device_send, device_handle));
