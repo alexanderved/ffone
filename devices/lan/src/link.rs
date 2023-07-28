@@ -144,23 +144,20 @@ impl Runnable for LanLink {
         Ok(())
     }
 
-    fn on_start(&mut self) -> error::Result<()> {
-        self.poller.register_message_stream(&mut self.msg_stream)?;
-        if let Some(audio_stream) = self.audio_stream.as_mut() {
-            self.poller.register_audio_stream(audio_stream)?;
-        }
+    fn on_start(&mut self) {
+        let _ = self.poller.register_message_stream(&mut self.msg_stream);
 
-        Ok(())
+        if let Some(audio_stream) = self.audio_stream.as_mut() {
+            let _ = self.poller.register_audio_stream(audio_stream);
+        }
     }
 
-    fn on_stop(&mut self) -> error::Result<()> {
-        self.poller
-            .deregister_message_stream(&mut self.msg_stream)?;
+    fn on_stop(&mut self) {
+        let _ = self.poller
+            .deregister_message_stream(&mut self.msg_stream);
         if let Some(audio_stream) = self.audio_stream.as_mut() {
-            self.poller.deregister_audio_stream(audio_stream)?;
+            let _ = self.poller.deregister_audio_stream(audio_stream);
         }
-
-        Ok(())
     }
 }
 

@@ -124,7 +124,7 @@ impl Runnable for AudioSystem {
         todo!()
     }
 
-    fn on_start(&mut self) -> error::Result<()> {
+    fn on_start(&mut self) {
         self.active_audio_dec = Some(choose_best_audio_decoder(&mut self.audio_decs));
         self.active_virtual_mic = Some(choose_best_virtual_microphone(&mut self.virtual_mics));
 
@@ -135,20 +135,11 @@ impl Runnable for AudioSystem {
 fn choose_best_audio_decoder(
     audio_decs: &mut HashMap<AudioDecoderInfo, Box<dyn AudioDecoder>>,
 ) -> AudioDecoderStateMachine {
-    let mut active_audio_dec = None;
-    let filtered_audio_decs = audio_decs
-        .drain()
-        .filter_map(|(info, audio_dec)| {
-            RunnableStateMachine::new_running(audio_dec).map_or_else(
-                |(audio_dec, _)| Some((info, audio_dec)),
-                |machine| {
-                    active_audio_dec = Some(machine);
-                    None
-                },
-            )
-        })
-        .collect::<HashMap<_, _>>();
-    *audio_decs = filtered_audio_decs;
+    let mut audio_decs_iter = audio_decs.drain();
+    let active_audio_dec = audio_decs_iter
+        .next()
+        .map(|(_, dec)| RunnableStateMachine::new_running(dec));
+    *audio_decs = audio_decs_iter.collect();
 
     active_audio_dec.expect("No suitable audio receivers were provided")
 }
@@ -156,20 +147,11 @@ fn choose_best_audio_decoder(
 fn choose_best_virtual_microphone(
     virtual_mics: &mut HashMap<VirtualMicrophoneInfo, Box<dyn VirtualMicrophone>>,
 ) -> VirtualMicrophoneStateMachine {
-    let mut active_virtual_mic = None;
-    let filtered_virtual_mics = virtual_mics
-        .drain()
-        .filter_map(|(info, mic)| {
-            RunnableStateMachine::new_running(mic).map_or_else(
-                |(mic, _)| Some((info, mic)),
-                |machine| {
-                    active_virtual_mic = Some(machine);
-                    None
-                },
-            )
-        })
-        .collect::<HashMap<_, _>>();
-    *virtual_mics = filtered_virtual_mics;
+    let mut virtual_mics_iter = virtual_mics.drain();
+    let active_virtual_mic = virtual_mics_iter
+        .next()
+        .map(|(_, mic)| RunnableStateMachine::new_running(mic));
+    *virtual_mics = virtual_mics_iter.collect();
 
     active_virtual_mic.expect("No suitable audio receivers were provided")
 }

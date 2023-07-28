@@ -12,19 +12,13 @@ pub enum ControlFlow {
 pub trait Runnable: AsRunnable {
     fn update(&mut self, control_flow: &mut ControlFlow) -> error::Result<()>;
 
-    fn on_start(&mut self) -> error::Result<()> {
-        Ok(())
-    }
+    fn on_start(&mut self) {}
 
-    fn on_stop(&mut self) -> error::Result<()> {
-        Ok(())
-    }
+    fn on_stop(&mut self) {}
 
-    fn run(&mut self) -> error::Result<()> {
-        let mut state_machine = RunnableStateMachine::new_running(self).map_err(|(_, err)| err)?;
+    fn run(&mut self) {
+        let mut state_machine = RunnableStateMachine::new_running(self);
         while state_machine.proceed().is_some() {}
-
-        Ok(())
     }
 }
 
@@ -33,15 +27,15 @@ impl<T: Runnable + ?Sized> Runnable for &'_ mut T {
         (**self).update(control_flow)
     }
 
-    fn on_start(&mut self) -> error::Result<()> {
+    fn on_start(&mut self) {
         (**self).on_start()
     }
 
-    fn on_stop(&mut self) -> error::Result<()> {
+    fn on_stop(&mut self) {
         (**self).on_stop()
     }
 
-    fn run(&mut self) -> error::Result<()> {
+    fn run(&mut self) {
         (**self).run()
     }
 }
@@ -51,15 +45,15 @@ impl<T: Runnable + ?Sized> Runnable for Box<T> {
         (**self).update(control_flow)
     }
 
-    fn on_start(&mut self) -> error::Result<()> {
+    fn on_start(&mut self) {
         (**self).on_start()
     }
 
-    fn on_stop(&mut self) -> error::Result<()> {
+    fn on_stop(&mut self) {
         (**self).on_stop()
     }
 
-    fn run(&mut self) -> error::Result<()> {
+    fn run(&mut self) {
         (**self).run()
     }
 }
@@ -86,16 +80,13 @@ impl<R: Runnable> RunnableStateMachine<R> {
         }
     }
 
-    pub fn new_running(mut runnable: R) -> Result<Self, (R, error::Error)> {
-        match runnable.on_start() {
-            Ok(()) => (),
-            Err(err) => return Err((runnable, err)),
-        }
+    pub fn new_running(mut runnable: R) -> Self {
+        runnable.on_start();
 
-        Ok(Self {
+        Self {
             state: RunnableState::Running(ControlFlow::Continue),
             runnable: runnable,
-        })
+        }
     }
 
     pub fn start(&mut self) -> error::Result<()> {
@@ -104,7 +95,7 @@ impl<R: Runnable> RunnableStateMachine<R> {
         }
         self.state = RunnableState::Running(ControlFlow::Continue);
 
-        self.runnable.on_start()?;
+        self.runnable.on_start();
 
         Ok(())
     }
@@ -114,7 +105,7 @@ impl<R: Runnable> RunnableStateMachine<R> {
             return Err(error::Error::WrongRunnableState);
         }
         self.state = RunnableState::NotRunning;
-        self.runnable.on_stop()?;
+        self.runnable.on_stop();
 
         Ok(())
     }

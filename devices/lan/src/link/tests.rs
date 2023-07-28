@@ -97,10 +97,10 @@ impl Runnable for FakeDevice {
         Ok(())
     }
 
-    fn on_start(&mut self) -> error::Result<()> {
-        let mut msg_stream = self.listener.accept()?.0;
-        msg_stream.set_nonblocking(true)?;
-        msg_stream.set_nodelay(true)?;
+    fn on_start(&mut self) {
+        let mut msg_stream = self.listener.accept().unwrap().0;
+        msg_stream.set_nonblocking(true).unwrap();
+        msg_stream.set_nodelay(true).unwrap();
 
         msg_stream.write_packet(&NetworkPacket::serialize(
             &DeviceMessage::StartAudioListener {
@@ -111,11 +111,9 @@ impl Runnable for FakeDevice {
                     sample_rate: Self::AUDIO_SAMPLE_RATE,
                 },
             },
-        )?)?;
+        ).unwrap()).unwrap();
 
         self.msg_stream = Some(msg_stream);
-
-        Ok(())
     }
 }
 
@@ -150,7 +148,7 @@ fn create_link(
         (Ipv4Addr::LOCALHOST, port).into(),
     ))?;
     link.connect(link_send);
-    let link = RunnableStateMachine::new_running(link).map_err(|(_, err)| err)?;
+    let link = RunnableStateMachine::new_running(link);
 
     Ok((link, link_recv))
 }
