@@ -102,16 +102,19 @@ impl Runnable for FakeDevice {
         msg_stream.set_nonblocking(true).unwrap();
         msg_stream.set_nodelay(true).unwrap();
 
-        msg_stream.write_packet(&NetworkPacket::serialize(
-            &DeviceMessage::StartAudioListener {
-                port: self.audio_port(),
-                info: EncodedAudioInfo {
-                    format: Self::AUDIO_FORMAT,
-                    codec: Self::AUDIO_CODEC,
-                    sample_rate: Self::AUDIO_SAMPLE_RATE,
-                },
-            },
-        ).unwrap()).unwrap();
+        msg_stream
+            .write_packet(
+                &NetworkPacket::serialize(&DeviceMessage::StartAudioListener {
+                    port: self.audio_port(),
+                    info: EncodedAudioInfo {
+                        format: Self::AUDIO_FORMAT,
+                        codec: Self::AUDIO_CODEC,
+                        sample_rate: Self::AUDIO_SAMPLE_RATE,
+                    },
+                })
+                .unwrap(),
+            )
+            .unwrap();
 
         self.msg_stream = Some(msg_stream);
     }

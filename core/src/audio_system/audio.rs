@@ -113,6 +113,18 @@ impl TimestampedRawAudioBuffer {
     pub fn as_slice(&self) -> &[u8] {
         self.raw.as_slice()
     }
+
+    pub fn into_raw(self) -> RawAudioBuffer {
+        self.raw
+    }
+
+    pub fn start(&self) -> Timestamp {
+        self.start
+    }
+
+    pub fn stop(&self) -> Timestamp {
+        self.stop
+    }
 }
 
 impl Message for TimestampedRawAudioBuffer {}

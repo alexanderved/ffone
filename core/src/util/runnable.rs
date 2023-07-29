@@ -76,7 +76,7 @@ impl<R: Runnable> RunnableStateMachine<R> {
     pub fn new(runnable: R) -> Self {
         Self {
             state: RunnableState::NotRunning,
-            runnable: runnable,
+            runnable,
         }
     }
 
@@ -85,7 +85,7 @@ impl<R: Runnable> RunnableStateMachine<R> {
 
         Self {
             state: RunnableState::Running(ControlFlow::Continue),
-            runnable: runnable,
+            runnable,
         }
     }
 
@@ -141,6 +141,10 @@ impl<R: Runnable> RunnableStateMachine<R> {
 
         // SAFETY: `self.runnable` is not used after `ptr::read`.
         unsafe { ptr::read(&manually_drop_self.runnable) }
+    }
+
+    pub fn is_running(&self) -> bool {
+        matches!(self.state, RunnableState::Running(_))
     }
 }
 

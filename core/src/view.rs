@@ -20,9 +20,3 @@ pub trait View:
     Component<Message = ViewMessage, ControlMessage = ViewControlMessage> + Runnable
 {
 }
-
-crate::impl_control_message_handler! {
-    @component View;
-    @message ViewMessage;
-    @control_message ViewControlMessage;
-}

@@ -122,9 +122,7 @@ impl Element for LanLink {
     type Message = DeviceSystemElementMessage;
 
     fn sender(&self) -> MessageSender<Self::Message> {
-        self.send
-            .clone()
-            .expect("A device link endpoint wasn't set")
+        self.send.clone().expect("A device link sender wasn't set")
     }
 
     fn connect(&mut self, send: MessageSender<Self::Message>) {
@@ -153,8 +151,7 @@ impl Runnable for LanLink {
     }
 
     fn on_stop(&mut self) {
-        let _ = self.poller
-            .deregister_message_stream(&mut self.msg_stream);
+        let _ = self.poller.deregister_message_stream(&mut self.msg_stream);
         if let Some(audio_stream) = self.audio_stream.as_mut() {
             let _ = self.poller.deregister_audio_stream(audio_stream);
         }

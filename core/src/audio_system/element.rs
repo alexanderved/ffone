@@ -41,3 +41,10 @@ pub trait AudioSink<In: Message>: AudioSystemElement + AsAudioSink<In> {
 }
 
 impl_as_trait!(audio_sink -> AudioSink<In: Message>);
+
+pub trait AudioFilter<In: Message, Out: Message>:
+    AudioSink<In> + AudioSource<Out> + AsAudioFilter<In, Out>
+{
+}
+
+impl_as_trait!(audio_filter -> AudioFilter<In: Message, Out: Message>);

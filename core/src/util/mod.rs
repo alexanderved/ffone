@@ -69,7 +69,8 @@ macro_rules! guard {
             $( $field : $field_ty, )*
         }
 
-        impl $(< $( $generics $(: $bound $(+ $bounds)* )? ),+ >)? $guard $(< $( $generics ),+ >)? {
+        impl $(< $( $generics $(: $bound $(+ $bounds)* )? ),+ >)? $guard $(< $( $generics ),+ >)?
+        {
             fn new($( mut $field : $field_ty, )*) -> $ret {
                 $new_block;
 
@@ -95,8 +96,10 @@ macro_rules! guard {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_as_trait {
-    ($method:ident -> $trait:ident $(< $( $generics:tt $(: $bound:tt $(+ $bounds:tt)* )? ),+ >)? ) =>
-    {
+    (
+        $method:ident ->
+            $trait:ident $(< $( $generics:tt $(: $bound:tt $(+ $bounds:tt)* )? ),+ >)?
+    ) => {
         ::paste::paste! {
             pub trait [<As $trait>] $(< $( $generics $(: $bound $(+ $bounds)* )? ),+ >)? {
                 fn [<as_ $method>] (&self) -> &dyn $trait $(< $( $generics ),+ >)?;
@@ -140,76 +143,5 @@ macro_rules! trait_alias {
         $vis trait $alias: $( $trait )* $( + $upcast )? {}
 
         impl<T: $( $trait )*> $alias for T {}
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! impl_control_message_handler {
-    (
-        $( @component $comp:ident )? $( @concrete_component $ccomp:ident )?
-            $(< $( $cgenerics:tt $(: $cbound:tt $(+ $cbounds:tt)* )? ),+ >)?;
-
-        @message $msg:ident $(< $( $mgenerics:tt $(: $mbound:tt $(+ $mbounds:tt)* )? ),+ >)?;
-        @control_message
-            $cmsg:ident $(< $( $cmgenerics:tt $(: $cmbound:tt $(+ $cmbounds:tt)* )? ),+ >)?;
-
-        $(
-            $op:ident $(( $( $ufields:ident ),* ))? $({ $( $nfields:ident ),* })?
-            => $method:ident
-            $( =>
-                $( $res:ident )?
-                $( @ok $ok:ident $(, @err $err:expr )? $(, @err_ctrl $err_ctrl:expr )? )?
-            )?;
-        )*
-    ) => {
-        impl $(< $( $cmgenerics $(: $cmbound $(+ $cmbounds)* )? ),+ >)? $cmsg $(<
-            $( $cmgenerics:tt ),+
-        >)? {
-            #[allow(unused)]
-            pub fn handle $( $(< $( $cgenerics $(: $cbound $(+ $cbounds)* )? ),+ >)? )? (
-                self,
-                handler: $( &mut impl $comp )? $( &mut $ccomp )? $(< $( $cgenerics ),+ >)?,
-                control_flow: &mut $crate::util::ControlFlow,
-            ) {
-                type __Handler = $( dyn $comp )? $( $ccomp )?
-                    $(< $( $cgenerics $(: $cbound $(+ $cbounds)* )? ),+ >)?;
-                use $msg::*;
-                match self {
-                    $(
-                        $cmsg::$op $(( $( $ufields ),* ))? $({ $( $nfields ),* })? => {
-                            let op_res = handler.$method(
-                                $( $( $ufields ),* , )? $( $( $nfields ),* )?
-                            );
-                            $(
-                                $(
-                                    let msg = $msg::$res(op_res);
-                                    handler.send(msg);
-                                )?
-
-                                $(
-                                    let msg = op_res.map_or_else(
-                                        $( $err, )?
-                                        $(
-                                            |err| $err_ctrl(
-                                                &mut *handler,
-                                                &mut *control_flow,
-                                                err,
-                                            ),
-                                        )?
-                                        $msg::$ok,
-                                    );
-                                    handler.send(msg);
-                                )?
-                            )?
-                        }
-                    )*
-                    $cmsg::Stop => {
-                        *control_flow = $crate::util::ControlFlow::Break;
-                    }
-                    _ => {}
-                }
-            }
-        }
     };
 }
