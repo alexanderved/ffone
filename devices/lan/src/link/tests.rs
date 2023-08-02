@@ -151,7 +151,8 @@ fn create_link(
         (Ipv4Addr::LOCALHOST, port).into(),
     ))?;
     link.connect(link_send);
-    let link = RunnableStateMachine::new_running(link);
+    let mut link = RunnableStateMachine::new(link);
+    link.start()?;
 
     Ok((link, link_recv))
 }

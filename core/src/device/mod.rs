@@ -39,7 +39,7 @@ pub struct DeviceSystem {
     notification_recv: MessageReceiver<DeviceSystemElementMessage>,
 
     active_discoverer: Option<DeviceDiscovererStateMachine>,
-    discoverers: HashMap<DeviceDiscovererInfo, Box<dyn DeviceDiscoverer>>,
+    discoverers: HashMap<DeviceDiscovererInfo, Option<Box<dyn DeviceDiscoverer>>>,
 
     link: Option<DeviceLinkStateMachine>,
 }
@@ -86,7 +86,7 @@ impl Runnable for DeviceSystem {
 fn collect_discoverers(
     discoverers_builders: Vec<Box<dyn DeviceDiscovererBuilder>>,
     sender: MessageSender<DeviceSystemElementMessage>,
-) -> HashMap<DeviceDiscovererInfo, Box<dyn DeviceDiscoverer>> {
+) -> HashMap<DeviceDiscovererInfo, Option<Box<dyn DeviceDiscoverer>>> {
     discoverers_builders
         .into_iter()
         .map(|mut builder| {
@@ -94,6 +94,6 @@ fn collect_discoverers(
             builder
         })
         .filter_map(|builder| builder.build().ok())
-        .map(|disc| (disc.info(), disc))
+        .map(|disc| (disc.info(), Some(disc)))
         .collect()
 }

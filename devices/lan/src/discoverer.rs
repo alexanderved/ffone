@@ -43,11 +43,13 @@ impl LanDiscoverer {
     ) -> error::Result<Box<dyn Iterator<Item = DeviceInfo> + Send + Sync>> {
         let mut new_devices = HashSet::new();
         self.broadcast.recv()?.for_each(|lan_info| {
-            self.infos
+            if self
+                .infos
                 .insert(lan_info.info(), lan_info.clone())
-                .map(|_| {
-                    new_devices.insert(lan_info.info());
-                });
+                .is_some()
+            {
+                new_devices.insert(lan_info.info());
+            }
         });
 
         Ok(Box::new(new_devices.into_iter()))
@@ -86,7 +88,7 @@ impl DeviceDiscoverer for LanDiscoverer {
     }
 
     fn enumerate_devices(&self) -> Box<dyn Iterator<Item = DeviceInfo> + Send + Sync> {
-        Box::new(self.infos.clone().into_iter().map(|(k, _)| k))
+        Box::new(self.infos.clone().into_keys())
     }
 
     fn open_link(&mut self, info: DeviceInfo) -> error::Result<Box<dyn DeviceLink>> {

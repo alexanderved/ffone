@@ -93,9 +93,8 @@ impl<R: Runnable> RunnableStateMachine<R> {
         if matches!(self.state, RunnableState::Running(_)) {
             return Err(error::Error::WrongRunnableState);
         }
-        self.state = RunnableState::Running(ControlFlow::Continue);
-
         self.runnable.on_start();
+        self.state = RunnableState::Running(ControlFlow::Continue);
 
         Ok(())
     }
@@ -104,8 +103,8 @@ impl<R: Runnable> RunnableStateMachine<R> {
         if matches!(self.state, RunnableState::NotRunning) {
             return Err(error::Error::WrongRunnableState);
         }
-        self.state = RunnableState::NotRunning;
         self.runnable.on_stop();
+        self.state = RunnableState::NotRunning;
 
         Ok(())
     }

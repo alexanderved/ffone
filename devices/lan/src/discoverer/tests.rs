@@ -74,7 +74,8 @@ fn test_enumerate_devices() -> error::Result<()> {
     let (device_send1, device_handle1) = run_device("fake1")?;
 
     let (disc_send, _disc_recv) = unidirectional_queue();
-    let mut discoverer = RunnableStateMachine::new_running(LanDiscoverer::new(disc_send)?);
+    let mut discoverer = RunnableStateMachine::new(LanDiscoverer::new(disc_send)?);
+    discoverer.start()?;
 
     let mut infos = HashSet::new();
     while infos.len() < 2 {

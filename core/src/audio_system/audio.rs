@@ -50,6 +50,19 @@ pub enum RawAudioFormat {
     F32BE,
 }
 
+impl RawAudioFormat {
+    pub const fn no_bytes(self) -> usize {
+        use RawAudioFormat::*;
+
+        match self {
+            U8 => 1,
+            S16LE | S16BE => 2,
+            S24LE | S24BE => 3,
+            S32LE | S32BE | F32LE | F32BE => 4,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawAudioBuffer {
     data: Vec<u8>,
@@ -63,6 +76,14 @@ impl RawAudioBuffer {
 
     pub fn as_slice(&self) -> &[u8] {
         &self.data
+    }
+
+    pub fn format(&self) -> RawAudioFormat {
+        self.format
+    }
+
+    pub fn no_samples(&self) -> usize {
+        self.as_slice().len() / self.format().no_bytes()
     }
 }
 
@@ -125,6 +146,18 @@ impl TimestampedRawAudioBuffer {
     pub fn stop(&self) -> Timestamp {
         self.stop
     }
+
+    pub fn duration(&self) -> Duration {
+        self.stop().as_dur() - self.stop().as_dur()
+    }
 }
 
 impl Message for TimestampedRawAudioBuffer {}
+
+pub enum AudioStreamTask {
+    Flush,
+    Play(RawAudioBuffer),
+    Downsample { audio: RawAudioBuffer, rate: f64 },
+}
+
+impl Message for AudioStreamTask {}

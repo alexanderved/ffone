@@ -102,7 +102,7 @@ impl LanLink {
 
         self.audio_stream = AudioStream::new((self.info.addr.ip(), port).into()).ok();
         if let Some(audio_stream) = self.audio_stream.as_mut() {
-            let _ = self.poller.register_audio_stream(audio_stream).unwrap();
+            let _ = self.poller.register_audio_stream(audio_stream);
 
             let port = audio_stream.socket().local_addr().unwrap().port();
             self.audio_listener_started(port);

@@ -6,16 +6,16 @@ use mueue::*;
 use crate::error;
 use crate::util::{ControlFlow, Element, Runnable};
 
-use super::audio::{Timestamp, TimestampedRawAudioBuffer};
+use super::audio::{AudioStreamTask, Timestamp, TimestampedRawAudioBuffer};
 use super::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
-use super::virtual_microphone::VirtualMicrophoneCommand;
 
+const MIN_DELAY: Duration = Duration::from_millis(20);
 const MAX_DELAY: Duration = Duration::from_millis(40);
 
 pub(super) struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
-    output: Option<MessageSender<VirtualMicrophoneCommand>>,
+    output: Option<MessageSender<AudioStreamTask>>,
 
     base: Option<Instant>,
     offset: Option<Timestamp>,
@@ -63,18 +63,23 @@ impl Runnable for Synchronizer {
             };
 
             let play_time = ts_buf.start().as_dur() - offset.as_dur();
-            let cmd = if play_time + MAX_DELAY <= base.elapsed() {
+            let cmd = if base.elapsed() - play_time >= MAX_DELAY {
                 self.base = None;
                 self.offset = None;
                 self.queue.push_front(ts_buf);
 
-                VirtualMicrophoneCommand::Flush
-            } else if play_time <= base.elapsed() {
-                // FIXME: Support resampling
-                VirtualMicrophoneCommand::Play {
+                AudioStreamTask::Flush
+            } else if base.elapsed() - play_time >= MIN_DELAY {
+                let delay = base.elapsed() - play_time;
+                let duration = ts_buf.duration();
+                let rate = 1.0 / (1.0 - delay.as_nanos() as f64 / duration.as_nanos() as f64);
+
+                AudioStreamTask::Downsample {
                     audio: ts_buf.into_raw(),
-                    resmaple_rate: 1.0,
+                    rate,
                 }
+            } else if play_time <= base.elapsed() {
+                AudioStreamTask::Play(ts_buf.into_raw())
             } else {
                 self.queue.push_front(ts_buf);
                 break;
@@ -103,12 +108,20 @@ impl AudioSink<TimestampedRawAudioBuffer> for Synchronizer {
     fn set_input(&mut self, input: MessageReceiver<TimestampedRawAudioBuffer>) {
         self.input = Some(input);
     }
-}
 
-impl AudioSource<VirtualMicrophoneCommand> for Synchronizer {
-    fn set_output(&mut self, output: MessageSender<VirtualMicrophoneCommand>) {
-        self.output = Some(output);
+    fn unset_input(&mut self) {
+        self.input = None;
     }
 }
 
-impl AudioFilter<TimestampedRawAudioBuffer, VirtualMicrophoneCommand> for Synchronizer {}
+impl AudioSource<AudioStreamTask> for Synchronizer {
+    fn set_output(&mut self, output: MessageSender<AudioStreamTask>) {
+        self.output = Some(output);
+    }
+
+    fn unset_output(&mut self) {
+        self.output = None;
+    }
+}
+
+impl AudioFilter<TimestampedRawAudioBuffer, AudioStreamTask> for Synchronizer {}

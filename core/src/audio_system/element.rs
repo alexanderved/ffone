@@ -25,6 +25,7 @@ impl<B: ElementBuilder> AudioSystemElementBuilder for B where Self::Element: Aud
 
 pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
     fn set_output(&mut self, output: MessageSender<Out>);
+    fn unset_output(&mut self);
 
     fn chain(&mut self, sink: &mut dyn AudioSink<Out>) {
         let (output, input) = unidirectional_queue();
@@ -38,6 +39,7 @@ impl_as_trait!(audio_source -> AudioSource<Out: Message>);
 
 pub trait AudioSink<In: Message>: AudioSystemElement + AsAudioSink<In> {
     fn set_input(&mut self, input: MessageReceiver<In>);
+    fn unset_input(&mut self);
 }
 
 impl_as_trait!(audio_sink -> AudioSink<In: Message>);
