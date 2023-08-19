@@ -1,0 +1,8 @@
+language = "C"
+no_includes = true
+tab_width = 4
+documentation = true
+documentation_style = "c++"
+
+[export]
+item_types = []

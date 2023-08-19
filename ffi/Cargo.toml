@@ -1,0 +1,15 @@
+[package]
+name = "ffone_ffi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+core = { package = "ffone_core", version = "0.1.0", path = "../core" }
+libc = "0.2.147"
+
+[build-dependencies]
+bindgen = "0.66.1"
+cbindgen = "0.24.5"
+cc = "1.0.79"

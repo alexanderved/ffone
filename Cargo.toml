@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 core = { package = "ffone_core", version = "0.1.0", path = "core" }
+ffi = { package = "ffone_ffi", version = "0.1.0", path = "ffi" }
 crossbeam-utils = "0.8.16"
 lan_device = { package = "ffone_lan_device", version = "0.1.0", path = "devices/lan" }
 
@@ -18,6 +19,7 @@ path = "audio_decoders/gstreamer"
 [workspace]
 members = [
     "core",
+    "ffi",
     "devices/lan",
     "audio_decoders/gstreamer"
 ]
