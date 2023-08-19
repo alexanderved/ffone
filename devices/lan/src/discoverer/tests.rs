@@ -80,7 +80,7 @@ fn test_enumerate_devices() -> error::Result<()> {
     let mut infos = HashSet::new();
     while infos.len() < 2 {
         if let Some(_) = discoverer.proceed() {
-            infos.extend(discoverer.as_runnable().enumerate_devices())
+            infos.extend(discoverer.runnable().enumerate_devices())
         }
     }
     discoverer.stop()?;

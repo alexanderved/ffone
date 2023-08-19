@@ -165,7 +165,7 @@ fn test_on_info_received() -> error::Result<()> {
 
     let mut info = DeviceInfo::new("");
     while let Some(_) = link.proceed() {
-        info = link.as_runnable().info();
+        info = link.runnable().info();
         break;
     }
     link.stop()?;
@@ -192,7 +192,7 @@ fn test_on_audio_info_received() -> error::Result<()> {
     while let Some(_) = link.proceed() {
         if let Some(DeviceSystemElementMessage::AudioInfoReceived(i)) = link_recv.recv() {
             info = i;
-            if let Some(audio_stream) = link.as_runnable().audio_stream.as_ref() {
+            if let Some(audio_stream) = link.runnable().audio_stream.as_ref() {
                 port = audio_stream.socket().peer_addr().map_or(0, |a| a.port());
             }
 

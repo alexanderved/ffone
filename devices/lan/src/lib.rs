@@ -37,6 +37,7 @@ pub enum HostMessage {
     Empty,
 
     AudioListenerStarted { port: u16 },
+    RestartAudioStream,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
