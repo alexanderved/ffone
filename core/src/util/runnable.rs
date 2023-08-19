@@ -126,11 +126,11 @@ impl<R: Runnable> RunnableStateMachine<R> {
         None
     }
 
-    pub fn as_runnable(&self) -> &R {
+    pub fn runnable(&self) -> &R {
         &self.runnable
     }
 
-    pub fn as_runnable_mut(&mut self) -> &mut R {
+    pub fn runnable_mut(&mut self) -> &mut R {
         &mut self.runnable
     }
 
