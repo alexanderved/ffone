@@ -33,8 +33,9 @@ pub struct EncodedAudioInfo {
 }
 
 #[repr(i8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum RawAudioFormat {
+    #[default]
     U8,
 
     S16LE,
@@ -72,6 +73,10 @@ pub struct RawAudioBuffer {
 impl RawAudioBuffer {
     pub fn new(data: Vec<u8>, format: RawAudioFormat) -> Self {
         Self { data, format }
+    }
+
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
     }
 
     pub fn as_slice(&self) -> &[u8] {

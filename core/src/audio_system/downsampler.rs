@@ -45,7 +45,7 @@ impl AudioDownsampler {
             let max_rate = rate.ceil() as usize;
             if samples.len() == max_rate {
                 let average_sample = samples.drain(..).sum::<Sample>() / max_rate as u8;
-                downsampled_buf.extend(average_sample.to_bytes());
+                downsampled_buf.extend(average_sample.into_bytes());
 
                 no_samples -= max_rate;
                 desired_no_samples -= 1;
@@ -54,7 +54,7 @@ impl AudioDownsampler {
         }
 
         if !samples.is_empty() {
-            downsampled_buf.extend(samples.into_iter().flat_map(|sample| sample.to_bytes()));
+            downsampled_buf.extend(samples.into_iter().flat_map(|sample| sample.into_bytes()));
         }
 
         RawAudioBuffer::new(downsampled_buf, audio.format())
@@ -190,7 +190,7 @@ impl Sample {
         }
     }
 
-    fn to_bytes(self) -> Vec<u8> {
+    fn into_bytes(self) -> Vec<u8> {
         match self {
             Sample::U8(a) => [a].into(),
             Sample::S16LE(a) => a.to_le_bytes().into(),

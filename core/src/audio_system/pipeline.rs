@@ -3,7 +3,7 @@ use crate::util::{ControlFlow, Runnable, RunnableStateMachine};
 
 use super::audio_decoder::*;
 use super::downsampler::AudioDownsampler;
-use super::element::{AsAudioSource, AsAudioSink};
+use super::element::{AsAudioSink, AsAudioSource};
 use super::sync::*;
 use super::virtual_microphone::*;
 
@@ -32,11 +32,23 @@ macro_rules! add_pipeline_element {
                         elem.as_audio_source_mut().chain($next.as_audio_sink_mut());
                     }
                 )?
-        
+
                 self.$name = Some(elem);
             }
 
             pub(super) fn [< take_ $func >](&mut self) -> Option<$elem> {
+                $(
+                    if let Some($prev) = self.$prev.as_mut() {
+                        $prev.as_audio_source_mut().unset_output();
+                    }
+                )?
+
+                $(
+                    if let Some($next) = self.$next.as_mut() {
+                        $next.as_audio_sink_mut().unset_input();
+                    }
+                )?
+
                 self.$name.take().map(|mut elem| {
                     if self.is_running {
                         elem.on_stop();
@@ -47,6 +59,14 @@ macro_rules! add_pipeline_element {
 
             pub(super) fn [< has_ $func >](&self) -> bool {
                 self.$name.is_some()
+            }
+
+            pub(super) fn $func(&self) -> Option<&$elem> {
+                self.$name.as_ref()
+            }
+
+            pub(super) fn [< $func _mut >](&mut self) -> Option<&mut $elem> {
+                self.$name.as_mut()
             }
         }
     };

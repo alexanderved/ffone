@@ -20,7 +20,10 @@ fn test_downsample_int_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 2.0).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 2.0).as_slice(),
+        downsampled_audio
+    );
 
     let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
     let downsampled_audio = {
@@ -33,7 +36,10 @@ fn test_downsample_int_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 2.0).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 2.0).as_slice(),
+        downsampled_audio
+    );
 
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
 
@@ -48,7 +54,10 @@ fn test_downsample_int_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 2.0).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 2.0).as_slice(),
+        downsampled_audio
+    );
 
     let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
     let downsampled_audio = {
@@ -61,7 +70,10 @@ fn test_downsample_int_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 2.0).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 2.0).as_slice(),
+        downsampled_audio
+    );
 }
 
 #[test]
@@ -83,7 +95,10 @@ fn test_downsample_real_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 1.5).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 1.5).as_slice(),
+        downsampled_audio
+    );
 
     let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
     let downsampled_audio = {
@@ -97,7 +112,10 @@ fn test_downsample_real_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 1.5).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 1.5).as_slice(),
+        downsampled_audio
+    );
 
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
 
@@ -113,7 +131,10 @@ fn test_downsample_real_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 1.5).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 1.5).as_slice(),
+        downsampled_audio
+    );
 
     let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
     let downsampled_audio = {
@@ -127,5 +148,8 @@ fn test_downsample_real_rate() {
 
         data
     };
-    assert_eq!(downsampler.downsample(audio, 1.5).as_slice(), downsampled_audio);
+    assert_eq!(
+        downsampler.downsample(audio, 1.5).as_slice(),
+        downsampled_audio
+    );
 }

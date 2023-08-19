@@ -3,6 +3,7 @@ pub mod audio_decoder;
 mod downsampler;
 pub mod element;
 mod pipeline;
+pub mod queue;
 mod sync;
 pub mod virtual_microphone;
 
@@ -20,10 +21,14 @@ use std::collections::HashMap;
 
 use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
 
+use self::audio::EncodedAudioInfo;
+
 pub type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
 #[non_exhaustive]
-pub enum AudioSystemMessage {}
+pub enum AudioSystemMessage {
+    RestartAudioStream,
+}
 
 impl Message for AudioSystemMessage {}
 
@@ -74,6 +79,67 @@ impl AudioSystem {
             audio_decs,
             virtual_mics,
         }
+    }
+
+    pub fn choose_audio_decoder(&mut self, info: AudioDecoderInfo) {
+        let dec = self.audio_decs.get_mut(&info).and_then(Option::take);
+        if let Some(dec) = dec {
+            if let Some(old_dec) = self.pipeline.runnable_mut().take_audio_decoder() {
+                self.audio_decs.insert(old_dec.info(), Some(old_dec));
+            }
+
+            // The new audio decoder needs to receive useful information such as
+            // an audio format header which is sent at the beginning of the audio stream,
+            // so we have to ask for restarting it.
+            self.send(AudioSystemMessage::RestartAudioStream);
+            self.pipeline.runnable_mut().set_audio_decoder(dec);
+        }
+    }
+
+    pub fn choose_virtual_microphone(&mut self, info: VirtualMicrophoneInfo) {
+        let mic = self.virtual_mics.get_mut(&info).and_then(Option::take);
+        if let Some(mic) = mic {
+            if let Some(old_mic) = self.pipeline.runnable_mut().take_virtual_microphone() {
+                self.virtual_mics.insert(old_mic.info(), Some(old_mic));
+            }
+
+            self.pipeline.runnable_mut().set_virtual_microphone(mic);
+        }
+    }
+
+    pub fn set_audio_info(&mut self, info: EncodedAudioInfo) {
+        self.provide_audio_info_to_decoders(info);
+        self.provide_sample_rate_to_microphones(info.sample_rate);
+    }
+
+    fn provide_audio_info_to_decoders(&mut self, info: EncodedAudioInfo) {
+        self.audio_decs
+            .values_mut()
+            .filter_map(|dec| dec.as_deref_mut())
+            .chain(
+                self.pipeline
+                    .runnable_mut()
+                    .audio_decoder_mut()
+                    .map(|dec| &mut **dec),
+            )
+            .for_each(|dec| {
+                dec.set_audio_info(info);
+            });
+    }
+
+    fn provide_sample_rate_to_microphones(&mut self, rate: u32) {
+        self.virtual_mics
+            .values_mut()
+            .filter_map(|mic| mic.as_deref_mut())
+            .chain(
+                self.pipeline
+                    .runnable_mut()
+                    .virtual_microphone_mut()
+                    .map(|mic| &mut **mic),
+            )
+            .for_each(|mic| {
+                mic.set_sample_rate(rate);
+            });
     }
 }
 
