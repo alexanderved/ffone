@@ -167,14 +167,26 @@ impl TimestampedRawAudioBuffer {
     pub fn duration(&self) -> Duration {
         self.stop().as_dur() - self.stop().as_dur()
     }
+
+    pub fn sample_duration(&self) -> Duration {
+        let duration = self.duration();
+        let no_samples = self.raw.no_samples() as u32;
+        
+        duration / no_samples
+    }
 }
 
 impl Message for TimestampedRawAudioBuffer {}
 
-pub enum AudioStreamTask {
-    Flush,
-    Play(RawAudioBuffer),
-    Downsample { audio: RawAudioBuffer, rate: f64 },
+pub enum AudioShortenerTask {
+    Downsample {
+        audio: RawAudioBuffer,
+        rate: f64,
+    },
+    Discard {
+        audio: RawAudioBuffer,
+        no_samples: usize,
+    },
 }
 
-impl Message for AudioStreamTask {}
+impl Message for AudioShortenerTask {}

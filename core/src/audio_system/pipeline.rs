@@ -2,7 +2,7 @@ use crate::error;
 use crate::util::{ControlFlow, Runnable, RunnableStateMachine};
 
 use super::audio_decoder::*;
-use super::downsampler::AudioDownsampler;
+use super::shortener::AudioShortener;
 use super::element::{AsAudioSink, AsAudioSource};
 use super::sync::*;
 use super::virtual_microphone::*;
@@ -78,7 +78,7 @@ pub(super) type AudioPipelineStateMachine = RunnableStateMachine<AudioPipeline>;
 pub(super) struct AudioPipeline {
     dec: Option<Box<dyn AudioDecoder>>,
     sync: Option<Synchronizer>,
-    downsampler: Option<AudioDownsampler>,
+    shortener: Option<AudioShortener>,
     mic: Option<Box<dyn VirtualMicrophone>>,
 
     is_running: bool,
@@ -90,7 +90,7 @@ impl AudioPipeline {
         Self {
             dec: None,
             sync: None,
-            downsampler: None,
+            shortener: None,
             mic: None,
 
             is_running: false,
@@ -109,13 +109,13 @@ impl AudioPipeline {
         @long_name synchronizer;
         @name sync;
         @prev dec;
-        @next downsampler;
+        @next shortener;
     }
 
     add_pipeline_element! {
-        @element AudioDownsampler;
-        @long_name downsampler;
-        @name downsampler;
+        @element AudioShortener;
+        @long_name shortener;
+        @name shortener;
         @prev sync;
         @next mic;
     }
@@ -124,7 +124,7 @@ impl AudioPipeline {
         @element Box<dyn VirtualMicrophone>;
         @long_name virtual_microphone;
         @name mic;
-        @prev downsampler;
+        @prev shortener;
     }
 }
 

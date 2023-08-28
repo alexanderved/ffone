@@ -1,14 +1,14 @@
 pub mod audio;
 pub mod audio_decoder;
-mod downsampler;
 pub mod element;
 mod pipeline;
 pub mod queue;
+mod shortener;
 mod sync;
 pub mod virtual_microphone;
 
 use audio_decoder::*;
-use downsampler::*;
+use shortener::*;
 use element::*;
 use pipeline::*;
 use sync::*;
@@ -60,14 +60,14 @@ impl AudioSystem {
 
         let mut audio_decs = collect_audio_decs(audio_decs_builders, notification_send.clone());
         let sync = Synchronizer::new(notification_send.clone());
-        let downsampler = AudioDownsampler::new(notification_send.clone());
+        let shortener = AudioShortener::new(notification_send.clone());
         let mut virtual_mics =
             collect_virtual_microphones(virtual_mics_builders, notification_send);
 
         let mut pipeline = AudioPipeline::new();
         pipeline.set_audio_decoder(take_first_audio_decoder(&mut audio_decs));
         pipeline.set_synchronizer(sync);
-        pipeline.set_downsampler(downsampler);
+        pipeline.set_shortener(shortener);
         pipeline.set_virtual_microphone(take_first_virtual_microphone(&mut virtual_mics));
 
         Self {

@@ -6,16 +6,16 @@ use mueue::*;
 use crate::error;
 use crate::util::{ControlFlow, Element, Runnable};
 
-use super::audio::{AudioStreamTask, Timestamp, TimestampedRawAudioBuffer};
+use super::audio::{AudioShortenerTask, Timestamp, TimestampedRawAudioBuffer};
 use super::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
 
-const MIN_DELAY: Duration = Duration::from_millis(20);
+const MIN_DELAY: Duration = Duration::from_nanos(0);
 const MAX_DELAY: Duration = Duration::from_millis(40);
 
 pub(super) struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
-    output: Option<MessageSender<AudioStreamTask>>,
+    output: Option<MessageSender<AudioShortenerTask>>,
 
     base: Option<Instant>,
     offset: Option<Timestamp>,
@@ -63,29 +63,30 @@ impl Runnable for Synchronizer {
             };
 
             let play_time = ts_buf.start().as_dur() - offset.as_dur();
-            let cmd = if base.elapsed() - play_time >= MAX_DELAY {
-                self.base = None;
-                self.offset = None;
-                self.queue.push_front(ts_buf);
+            let delay = base.elapsed() - play_time;
+            let task = if delay >= MAX_DELAY {
+                let sample_duration = ts_buf.sample_duration();
+                let no_samples = delay.as_nanos() / sample_duration.as_nanos();
 
-                AudioStreamTask::Flush
-            } else if base.elapsed() - play_time >= MIN_DELAY {
+                AudioShortenerTask::Discard {
+                    audio: ts_buf.into_raw(),
+                    no_samples: no_samples as usize,
+                }
+            } else if delay >= MIN_DELAY {
                 let delay = base.elapsed() - play_time;
                 let duration = ts_buf.duration();
                 let rate = 1.0 / (1.0 - delay.as_nanos() as f64 / duration.as_nanos() as f64);
 
-                AudioStreamTask::Downsample {
+                AudioShortenerTask::Downsample {
                     audio: ts_buf.into_raw(),
                     rate,
                 }
-            } else if play_time <= base.elapsed() {
-                AudioStreamTask::Play(ts_buf.into_raw())
             } else {
                 self.queue.push_front(ts_buf);
                 break;
             };
 
-            let _ = output.send(cmd);
+            let _ = output.send(task);
         }
 
         Ok(())
@@ -114,8 +115,8 @@ impl AudioSink<TimestampedRawAudioBuffer> for Synchronizer {
     }
 }
 
-impl AudioSource<AudioStreamTask> for Synchronizer {
-    fn set_output(&mut self, output: MessageSender<AudioStreamTask>) {
+impl AudioSource<AudioShortenerTask> for Synchronizer {
+    fn set_output(&mut self, output: MessageSender<AudioShortenerTask>) {
         self.output = Some(output);
     }
 
@@ -124,4 +125,4 @@ impl AudioSource<AudioStreamTask> for Synchronizer {
     }
 }
 
-impl AudioFilter<TimestampedRawAudioBuffer, AudioStreamTask> for Synchronizer {}
+impl AudioFilter<TimestampedRawAudioBuffer, AudioShortenerTask> for Synchronizer {}

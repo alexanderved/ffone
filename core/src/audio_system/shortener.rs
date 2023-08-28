@@ -12,13 +12,13 @@ use std::ops;
 
 use mueue::*;
 
-pub(super) struct AudioDownsampler {
+pub(super) struct AudioShortener {
     send: MessageSender<AudioSystemElementMessage>,
-    input: Option<MessageReceiver<AudioStreamTask>>,
-    output: Option<MessageSender<AudioStreamTask>>,
+    input: Option<MessageReceiver<AudioShortenerTask>>,
+    output: Option<MessageSender<RawAudioBuffer>>,
 }
 
-impl AudioDownsampler {
+impl AudioShortener {
     pub(super) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
         Self {
             send,
@@ -28,8 +28,12 @@ impl AudioDownsampler {
     }
 
     fn downsample(&self, audio: RawAudioBuffer, mut rate: f64) -> RawAudioBuffer {
+        if (rate - 1.0).abs() <= f64::EPSILON {
+            return audio;
+        }
+
         assert!(
-            rate >= 1.0,
+            rate > 1.0,
             "The downsampling rate must be greater than 1.0"
         );
 
@@ -59,9 +63,16 @@ impl AudioDownsampler {
 
         RawAudioBuffer::new(downsampled_buf, audio.format())
     }
+
+    fn discard(&self, mut audio: RawAudioBuffer, no_samples: usize) -> RawAudioBuffer {
+        let no_bytes = audio.format().no_bytes();
+        vec_truncate_front(audio.as_vec_mut(), no_samples * no_bytes);
+
+        audio
+    }
 }
 
-impl Runnable for AudioDownsampler {
+impl Runnable for AudioShortener {
     fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
         let Some(input) = self.input.as_ref() else {
             return Ok(());
@@ -71,22 +82,21 @@ impl Runnable for AudioDownsampler {
         };
 
         for cmd in input.iter() {
-            let cmd = match cmd {
-                AudioStreamTask::Downsample { audio, rate } => {
-                    let new_audio = self.downsample(audio, rate);
-                    AudioStreamTask::Play(new_audio)
+            let new_audio = match cmd {
+                AudioShortenerTask::Downsample { audio, rate } => self.downsample(audio, rate),
+                AudioShortenerTask::Discard { audio, no_samples } => {
+                    self.discard(audio, no_samples)
                 }
-                cmd => cmd,
             };
 
-            let _ = output.send(cmd);
+            let _ = output.send(new_audio);
         }
 
         Ok(())
     }
 }
 
-impl Element for AudioDownsampler {
+impl Element for AudioShortener {
     type Message = AudioSystemElementMessage;
 
     fn sender(&self) -> MessageSender<Self::Message> {
@@ -98,8 +108,8 @@ impl Element for AudioDownsampler {
     }
 }
 
-impl AudioSink<AudioStreamTask> for AudioDownsampler {
-    fn set_input(&mut self, input: MessageReceiver<AudioStreamTask>) {
+impl AudioSink<AudioShortenerTask> for AudioShortener {
+    fn set_input(&mut self, input: MessageReceiver<AudioShortenerTask>) {
         self.input = Some(input);
     }
 
@@ -108,8 +118,8 @@ impl AudioSink<AudioStreamTask> for AudioDownsampler {
     }
 }
 
-impl AudioSource<AudioStreamTask> for AudioDownsampler {
-    fn set_output(&mut self, output: MessageSender<AudioStreamTask>) {
+impl AudioSource<RawAudioBuffer> for AudioShortener {
+    fn set_output(&mut self, output: MessageSender<RawAudioBuffer>) {
         self.output = Some(output);
     }
 
@@ -118,7 +128,7 @@ impl AudioSource<AudioStreamTask> for AudioDownsampler {
     }
 }
 
-impl AudioFilter<AudioStreamTask, AudioStreamTask> for AudioDownsampler {}
+impl AudioFilter<AudioShortenerTask, RawAudioBuffer> for AudioShortener {}
 
 #[derive(Debug)]
 enum Sample {
