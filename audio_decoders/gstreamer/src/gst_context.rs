@@ -83,9 +83,7 @@ impl GstContext {
         gst::Element::link_many(&[src.upcast_ref(), &demuxer]).unwrap();
         gst::Element::link_many(&[&parser, &decoder, sink.upcast_ref()]).unwrap();
 
-        pipeline.set_state(gst::State::Playing).unwrap();
-
-        Self {
+        let this = Self {
             pipeline,
 
             src,
@@ -93,19 +91,22 @@ impl GstContext {
             parser,
             decoder,
             sink,
-        }
+        };
+        this.make_playing();
+
+        this
     }
 
     pub(super) fn push(&self, buffer: EncodedAudioBuffer) {
         let gst_buffer = gst::Buffer::from_slice(buffer.0);
 
-        self.src.push_buffer(gst_buffer).unwrap();
+        let _ = self.src.push_buffer(gst_buffer);
     }
 
     pub(super) fn pull(&self) -> Option<TimestampedRawAudioBuffer> {
         let sample = self
             .sink
-            .try_pull_sample(Some(gst::ClockTime::from_mseconds(0)))?;
+            .try_pull_sample(Some(gst::ClockTime::from_mseconds(1)))?;
 
         let raw = raw_audio_buffer_from_sample(&sample)?;
         let (start, stop) = timestamps_from_sample(&sample)?;
@@ -113,8 +114,26 @@ impl GstContext {
         Some(TimestampedRawAudioBuffer::new(raw, start, stop))
     }
 
+    pub(super) fn push_eos(&self) {
+        let _ = self.src.end_of_stream();
+    }
+
     pub(super) fn is_eos(&self) -> bool {
         self.sink.is_eos()
+    }
+
+    pub(super) fn make_playing(&self) {
+        self.pipeline.set_state(gst::State::Playing).unwrap();
+    }
+
+    pub(super) fn make_null(&self) {
+        self.pipeline.set_state(gst::State::Null).unwrap();
+    }
+
+    pub(super) fn is_playing_failed(&self) -> bool {
+        let (res, _, pending) = self.pipeline.state(Some(gst::ClockTime::from_mseconds(0)));
+
+        res.is_err() && pending == gst::State::Playing
     }
 }
 

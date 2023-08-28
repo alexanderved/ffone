@@ -15,12 +15,15 @@ fn test_decode_ogg() {
 
     let encoded_audio = EncodedAudioBuffer(Vec::from(OGG_FILE));
     ctx.push(encoded_audio);
-    ctx.src.end_of_stream().unwrap();
+    ctx.push_eos();
 
     let mut decoded_audio = vec![];
     while !ctx.is_eos() {
-        let Some(audio) = ctx.pull() else { continue };
+        if ctx.is_playing_failed() {
+            break;
+        }
 
+        let Some(audio) = ctx.pull() else { continue };
         decoded_audio.extend_from_slice(audio.as_slice());
     }
 

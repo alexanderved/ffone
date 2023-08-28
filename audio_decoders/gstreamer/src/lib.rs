@@ -16,6 +16,28 @@ pub struct GstDecoder {
     context: Option<GstContext>,
 }
 
+impl GstDecoder {
+    fn drain(&self) {
+        let Some(output) = self.output.as_ref() else {
+            return;
+        };
+        let Some(context) = self.context.as_ref() else {
+            return;
+        };
+
+        context.push_eos();
+        while !context.is_eos() {
+            if context.is_playing_failed() {
+                break;
+            }
+
+            if let Some(audio) = context.pull() {
+                let _ = output.send(audio);
+            }
+        }
+    }
+}
+
 impl Runnable for GstDecoder {
     fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
         let Some(output) = self.output.as_ref() else {
@@ -33,6 +55,19 @@ impl Runnable for GstDecoder {
         }
 
         Ok(())
+    }
+
+    fn on_start(&mut self) {
+        if let Some(context) = self.context.as_ref() {
+            context.make_playing();
+        }
+    }
+
+    fn on_stop(&mut self) {
+        if let Some(context) = self.context.as_ref() {
+            self.drain();
+            context.make_null();
+        }
     }
 }
 
@@ -66,6 +101,7 @@ impl AudioDecoder for GstDecoder {
     }
 
     fn set_audio_info(&mut self, info: EncodedAudioInfo) {
+        self.drain();
         self.context = Some(GstContext::new(info));
     }
 
