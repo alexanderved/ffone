@@ -79,8 +79,20 @@ impl RawAudioBuffer {
         self.as_slice().len()
     }
 
-    pub fn as_slice(&self) -> &[u8] {
+    pub fn as_vec(&self) -> &Vec<u8> {
         &self.data
+    }
+
+    pub fn as_vec_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.data
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.as_vec()
+    }
+
+    pub fn as_slice_mut(&mut self) -> &mut [u8] {
+        self.as_vec_mut()
     }
 
     pub fn format(&self) -> RawAudioFormat {
