@@ -1,3 +1,5 @@
+use crate::util::vec_truncate_front;
+
 use super::audio::{RawAudioBuffer, RawAudioFormat};
 
 use std::collections::VecDeque;
@@ -19,8 +21,40 @@ impl RawAudioQueue {
         self.buffers.front().map(|buf| buf.format())
     }
 
+    pub fn has_buffers(&self) -> bool {
+        !self.buffers.is_empty()
+    }
+
+    pub fn has_bytes(&self) -> bool {
+        self.buffers.front().is_some_and(|buf| buf.len() != 0)
+    }
+
     pub fn push_buffer(&mut self, buffer: RawAudioBuffer) {
         self.buffers.push_back(buffer);
+    }
+
+    pub fn pop_buffer(&mut self) -> Option<RawAudioBuffer> {
+        let mut buf = self.buffers.pop_front();
+
+        let offset = self.front_buffer_offset;
+        self.front_buffer_offset = 0;
+
+        if let Some(buf) = buf.as_mut() {
+            vec_truncate_front(buf.as_vec_mut(), offset);
+        }
+
+        buf
+    }
+
+    pub fn pop_buffer_formatted(&mut self, format: RawAudioFormat) -> Option<RawAudioBuffer> {
+        if self
+            .front_buffer_format()
+            .is_some_and(|buf_format| buf_format == format)
+        {
+            return self.pop_buffer();
+        }
+
+        None
     }
 
     pub fn pop_bytes(&mut self, desired: usize) -> Option<(Vec<u8>, RawAudioFormat)> {
@@ -54,13 +88,13 @@ impl RawAudioQueue {
         desired: usize,
         format: RawAudioFormat,
     ) -> Option<Vec<u8>> {
-        if !self
+        if self
             .front_buffer_format()
             .is_some_and(|buf_format| buf_format == format)
         {
-            return None;
+            return self.pop_bytes(desired).map(|(bytes, _)| bytes);
         }
 
-        self.pop_bytes(desired).map(|(bytes, _)| bytes)
+        None
     }
 }
