@@ -3,25 +3,34 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "audio.h"
 
-typedef struct RawAudioQueueRC RawAudioQueueRC;
+typedef struct RawAudioQueue RawAudioQueue;
 
-struct RawAudioQueueRC *ffone_raw_audio_queue_ref(struct RawAudioQueueRC *queue);
+RawAudioQueue *ffone_raw_audio_queue_new(void);
 
-void ffone_raw_audio_queue_unref(struct RawAudioQueueRC *queue);
+bool ffone_raw_audio_queue_has_buffers(RawAudioQueue *queue);
 
-int ffone_raw_audio_queue_front_buffer_format(struct RawAudioQueueRC *queue,
-                                              RawAudioFormat *format);
+bool ffone_raw_audio_queue_has_bytes(RawAudioQueue *queue);
 
-void ffone_raw_audio_queue_read_bytes(struct RawAudioQueueRC *queue,
+bool ffone_raw_audio_queue_front_buffer_format(RawAudioQueue *queue, RawAudioFormat *format);
+
+RawAudioBuffer *ffone_raw_audio_queue_pop_buffer(RawAudioQueue *queue);
+
+RawAudioBuffer *ffone_raw_audio_queue_pop_buffer_formatted(RawAudioQueue *queue,
+                                                           RawAudioFormat format,
+                                                           bool *has_same_format);
+
+void ffone_raw_audio_queue_read_bytes(RawAudioQueue *queue,
                                       uint8_t *bytes,
                                       size_t *nbytes,
                                       RawAudioFormat *format);
 
-void ffone_raw_audio_queue_read_bytes_formatted(struct RawAudioQueueRC *queue,
+void ffone_raw_audio_queue_read_bytes_formatted(RawAudioQueue *queue,
                                                 uint8_t *bytes,
                                                 size_t *nbytes,
-                                                RawAudioFormat format);
+                                                RawAudioFormat format,
+                                                bool *have_same_format);
 
 #endif /* _FFONE_QUEUE_H */
