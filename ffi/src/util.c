@@ -1,8 +1,20 @@
-#include "../include/util.h"
+#include "util.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
+
+#ifdef _WIN32
+#include <process.h>
+
+#ifdef getpid
+#undef getpid
+#endif /* getpid */
+
+#define getpid _getpid
+
+#else /* _WIN32 */
+#include <unistd.h>
+#endif /* _WIN32 */
 
 char *ffone_format_str(const char *fmt, ...) {
     va_list probe_args;
@@ -22,4 +34,8 @@ char *ffone_format_str(const char *fmt, ...) {
     vsprintf(buf, fmt, args);
 
     return buf;
+}
+
+int ffone_get_pid() {
+    return (int)getpid();
 }
