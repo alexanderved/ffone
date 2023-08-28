@@ -6,3 +6,6 @@ documentation_style = "c++"
 
 [export]
 item_types = []
+
+[enum]
+prefix_with_name = true
