@@ -7,7 +7,32 @@ pub use element::*;
 pub use runnable::*;
 
 use std::cell::Cell;
+use std::ptr;
 use std::time::*;
+
+pub fn vec_truncate_front<T>(vec: &mut Vec<T>, len: usize) {
+    if len == 0 {
+        return;
+    }
+    if len > vec.len() {
+        vec.clear();
+
+        return;
+    }
+
+    let remaining_len = vec.len() - len;
+    let vec_ptr = vec.as_mut_ptr();
+
+    unsafe {
+        let slice = ptr::slice_from_raw_parts_mut(vec_ptr, len);
+        ptr::drop_in_place(slice);
+
+        if remaining_len > 0 {
+            ptr::copy(vec_ptr.add(len), vec_ptr, remaining_len);
+        }
+        vec.set_len(remaining_len);
+    }
+}
 
 pub struct Timer {
     pub start: Cell<Instant>,
