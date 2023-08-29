@@ -7,8 +7,10 @@ use super::element::*;
 use crate::error;
 use crate::util::*;
 
+use std::cell::UnsafeCell;
 use std::iter;
 use std::ops;
+use std::ptr;
 
 use mueue::*;
 
@@ -16,6 +18,8 @@ pub(super) struct AudioShortener {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<AudioShortenerTask>>,
     output: Option<MessageSender<RawAudioBuffer>>,
+
+    temp_samples: UnsafeCell<Vec<Sample>>,
 }
 
 impl AudioShortener {
@@ -24,44 +28,69 @@ impl AudioShortener {
             send,
             input: None,
             output: None,
+
+            temp_samples: UnsafeCell::new(vec![]),
         }
     }
 
-    fn downsample(&self, audio: RawAudioBuffer, mut rate: f64) -> RawAudioBuffer {
+    fn downsample(&self, mut audio: RawAudioBuffer, mut rate: f64) -> RawAudioBuffer {
         if (rate - 1.0).abs() <= f64::EPSILON {
             return audio;
         }
 
-        assert!(
-            rate > 1.0,
-            "The downsampling rate must be greater than 1.0"
-        );
+        assert!(rate > 1.0, "The downsampling rate must be greater than 1.0");
 
-        let mut downsampled_buf = vec![];
-
+        let no_bytes = audio.format().no_bytes();
         let mut no_samples = audio.no_samples();
         let mut desired_no_samples = (no_samples as f64 / rate) as usize;
 
-        let mut samples: Vec<Sample> = Vec::with_capacity(rate.ceil() as usize);
+        let mut next_sample_ptr = audio.as_slice_mut().as_mut_ptr();
+
+        let mut bytes = [0; 4];
+        let temp_samples = unsafe { &mut *self.temp_samples.get() };
+
         for sample in SampleIter::new(&audio) {
-            samples.push(sample);
+            let min_rate = rate.floor() as usize;
+            if min_rate > 1 {
+                temp_samples.push(sample);
 
-            let max_rate = rate.ceil() as usize;
-            if samples.len() == max_rate {
-                let average_sample = samples.drain(..).sum::<Sample>() / max_rate as u8;
-                downsampled_buf.extend(average_sample.into_bytes());
+                if temp_samples.len() == min_rate {
+                    let sample_sum = temp_samples.drain(..).sum::<Sample>();
+                    let average_sample = sample_sum / min_rate as u8;
 
-                no_samples -= max_rate;
+                    average_sample.copy_bytes_into(&mut bytes);
+                    unsafe {
+                        ptr::copy_nonoverlapping(bytes.as_ptr(), next_sample_ptr, no_bytes);
+                    }
+                }
+            }
+
+            if temp_samples.is_empty() {
+                unsafe {
+                    next_sample_ptr = next_sample_ptr.add(no_bytes);
+                }
+
+                no_samples -= min_rate;
                 desired_no_samples -= 1;
                 rate = no_samples as f64 / desired_no_samples as f64;
             }
         }
 
-        if !samples.is_empty() {
-            downsampled_buf.extend(samples.into_iter().flat_map(|sample| sample.into_bytes()));
+        if !temp_samples.is_empty() {
+            let samples_len = temp_samples.len() as u8;
+            let average_sample = temp_samples.drain(..).sum::<Sample>() / samples_len;
+
+            average_sample.copy_bytes_into(&mut bytes);
+            unsafe {
+                ptr::copy_nonoverlapping(bytes.as_ptr(), next_sample_ptr, no_bytes);
+                next_sample_ptr = next_sample_ptr.add(no_bytes);
+            }
         }
 
-        RawAudioBuffer::new(downsampled_buf, audio.format())
+        let final_len = next_sample_ptr as usize - audio.as_slice().as_ptr() as usize;
+        audio.as_vec_mut().truncate(final_len);
+
+        audio
     }
 
     fn discard(&self, mut audio: RawAudioBuffer, no_samples: usize) -> RawAudioBuffer {
@@ -200,17 +229,17 @@ impl Sample {
         }
     }
 
-    fn into_bytes(self) -> Vec<u8> {
+    fn copy_bytes_into(&self, bytes: &mut [u8]) {
         match self {
-            Sample::U8(a) => [a].into(),
-            Sample::S16LE(a) => a.to_le_bytes().into(),
-            Sample::S16BE(a) => a.to_be_bytes().into(),
-            Sample::S24LE(a) => a.to_le_bytes()[0..3].into(),
-            Sample::S24BE(a) => a.to_be_bytes()[1..4].into(),
-            Sample::S32LE(a) => a.to_le_bytes().into(),
-            Sample::S32BE(a) => a.to_be_bytes().into(),
-            Sample::F32LE(a) => a.to_le_bytes().into(),
-            Sample::F32BE(a) => a.to_be_bytes().into(),
+            Sample::U8(a) => bytes[0..1].clone_from_slice(&[*a]),
+            Sample::S16LE(a) => bytes[0..2].clone_from_slice(&a.to_le_bytes()),
+            Sample::S16BE(a) => bytes[0..2].clone_from_slice(&a.to_be_bytes()),
+            Sample::S24LE(a) => bytes[0..3].clone_from_slice(&a.to_le_bytes()[0..3]),
+            Sample::S24BE(a) => bytes[0..3].clone_from_slice(&a.to_be_bytes()[1..4]),
+            Sample::S32LE(a) => bytes[0..4].clone_from_slice(&a.to_le_bytes()),
+            Sample::S32BE(a) => bytes[0..4].clone_from_slice(&a.to_be_bytes()),
+            Sample::F32LE(a) => bytes[0..4].clone_from_slice(&a.to_le_bytes()),
+            Sample::F32BE(a) => bytes[0..4].clone_from_slice(&a.to_be_bytes()),
         }
     }
 }

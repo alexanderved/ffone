@@ -171,7 +171,7 @@ impl TimestampedRawAudioBuffer {
     pub fn sample_duration(&self) -> Duration {
         let duration = self.duration();
         let no_samples = self.raw.no_samples() as u32;
-        
+
         duration / no_samples
     }
 }

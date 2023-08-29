@@ -2,8 +2,8 @@ use crate::error;
 use crate::util::{ControlFlow, Runnable, RunnableStateMachine};
 
 use super::audio_decoder::*;
-use super::shortener::AudioShortener;
 use super::element::{AsAudioSink, AsAudioSource};
+use super::shortener::AudioShortener;
 use super::sync::*;
 use super::virtual_microphone::*;
 

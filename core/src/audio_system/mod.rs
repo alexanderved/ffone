@@ -8,9 +8,9 @@ mod sync;
 pub mod virtual_microphone;
 
 use audio_decoder::*;
-use shortener::*;
 use element::*;
 use pipeline::*;
+use shortener::*;
 use sync::*;
 use virtual_microphone::*;
 
