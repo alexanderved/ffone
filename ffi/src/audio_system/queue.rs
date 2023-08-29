@@ -3,71 +3,119 @@ use core::audio_system::{
     queue::RawAudioQueue,
 };
 
-use std::{mem::MaybeUninit, ptr};
+use std::{
+    mem::{self, ManuallyDrop},
+    ptr,
+};
 
-pub struct CRawAudioQueueRC {
-    ref_count: usize,
-    queue: RawAudioQueue,
-}
-
-impl CRawAudioQueueRC {
-    pub fn new(queue: RawAudioQueue) -> *mut Self {
-        Box::into_raw(Box::new(Self {
-            ref_count: 1,
-            queue,
-        }))
-    }
-
-    pub unsafe fn push_buffer(this: *mut Self, buffer: RawAudioBuffer) {
-        (*this).queue.push_buffer(buffer);
-    }
-}
+use crate::rc::{ffone_rc_alloc0, ffone_rc_ref, ffone_rc_unref};
 
 #[no_mangle]
-pub unsafe extern "C" fn ffone_raw_audio_queue_ref(
-    queue: *mut CRawAudioQueueRC,
-) -> *mut CRawAudioQueueRC {
-    if queue.is_null() {
+pub unsafe extern "C" fn ffone_raw_audio_queue_new() -> *mut RawAudioQueue {
+    let rc = ffone_rc_alloc0(
+        mem::size_of::<RawAudioQueue>(),
+        Some(ffone_raw_audio_queue_dtor),
+    )
+    .cast::<RawAudioQueue>();
+    if rc.is_null() {
         return ptr::null_mut();
     }
-    (*queue).ref_count += 1;
 
-    queue
+    rc.write(RawAudioQueue::new());
+    rc
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ffone_raw_audio_queue_unref(queue: *mut CRawAudioQueueRC) {
+unsafe extern "C" fn ffone_raw_audio_queue_dtor(queue: *mut libc::c_void) {
     if queue.is_null() {
         return;
     }
 
-    (*queue).ref_count -= 1;
-    if (*queue).ref_count == 0 {
-        drop(Box::from_raw(queue));
+    queue.cast::<RawAudioQueue>().drop_in_place();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ffone_raw_audio_queue_has_bytes(queue: *mut RawAudioQueue) -> bool {
+    if queue.is_null() {
+        return false;
     }
+
+    (*queue).has_bytes()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ffone_raw_audio_queue_has_buffers(queue: *mut RawAudioQueue) -> bool {
+    if queue.is_null() {
+        return false;
+    }
+
+    (*queue).has_buffers()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ffone_raw_audio_queue_front_buffer_format(
-    queue: *mut CRawAudioQueueRC,
+    queue: *mut RawAudioQueue,
     format: *mut RawAudioFormat,
-) -> libc::c_int {
+) -> bool {
     if queue.is_null() || format.is_null() {
-        return 0;
+        return false;
     }
 
-    if let Some(front_buffer_format) = (*queue).queue.front_buffer_format() {
+    if let Some(front_buffer_format) = (*queue).front_buffer_format() {
         format.write(front_buffer_format);
 
-        return 1;
+        return true;
     }
 
-    0
+    false
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ffone_raw_audio_queue_pop_buffer(
+    queue: *mut RawAudioQueue,
+) -> *mut RawAudioBuffer {
+    if queue.is_null() {
+        return ptr::null_mut();
+    }
+
+    let Some(buffer) = (*queue).pop_buffer() else {
+        return ptr::null_mut();
+    };
+
+    Box::into_raw(Box::new(buffer))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ffone_raw_audio_queue_pop_buffer_formatted(
+    queue: *mut RawAudioQueue,
+    format: RawAudioFormat,
+    have_same_format: *mut bool,
+) -> *mut RawAudioBuffer {
+    if queue.is_null() {
+        return ptr::null_mut();
+    }
+
+    if !have_same_format.is_null() {
+        have_same_format.write(true);
+    }
+
+    let Some(front_buffer_format) = (*queue).front_buffer_format() else {
+        return ptr::null_mut();
+    };
+    if front_buffer_format != format {
+        if !have_same_format.is_null() {
+            have_same_format.write(false);
+        }
+
+        return ptr::null_mut();
+    }
+
+    ffone_raw_audio_queue_pop_buffer(queue)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ffone_raw_audio_queue_read_bytes(
-    queue: *mut CRawAudioQueueRC,
+    queue: *mut RawAudioQueue,
     bytes: *mut u8,
     nbytes: *mut libc::size_t,
     format: *mut RawAudioFormat,
@@ -76,7 +124,7 @@ pub unsafe extern "C" fn ffone_raw_audio_queue_read_bytes(
         return;
     }
 
-    let Some((audio, audio_format)) = (*queue).queue.pop_bytes(*nbytes) else {
+    let Some((audio, audio_format)) = (*queue).pop_bytes(*nbytes) else {
         nbytes.write(0);
         return;
     };
@@ -91,82 +139,96 @@ pub unsafe extern "C" fn ffone_raw_audio_queue_read_bytes(
 
 #[no_mangle]
 pub unsafe extern "C" fn ffone_raw_audio_queue_read_bytes_formatted(
-    queue: *mut CRawAudioQueueRC,
+    queue: *mut RawAudioQueue,
     bytes: *mut u8,
     nbytes: *mut libc::size_t,
     format: RawAudioFormat,
+    have_same_format: *mut bool,
 ) {
     if queue.is_null() || bytes.is_null() || nbytes.is_null() {
         return;
     }
 
-    let mut front_buffer_format = MaybeUninit::uninit();
-    if ffone_raw_audio_queue_front_buffer_format(queue, front_buffer_format.as_mut_ptr()) != 0 {
-        if front_buffer_format.assume_init() == format {
-            ffone_raw_audio_queue_read_bytes(queue, bytes, nbytes, ptr::null_mut());
+    if !have_same_format.is_null() {
+        have_same_format.write(true);
+    }
 
-            return;
+    let Some(front_buffer_format) = (*queue).front_buffer_format() else {
+        nbytes.write(0);
+
+        return;
+    };
+    if front_buffer_format != format {
+        nbytes.write(0);
+        if !have_same_format.is_null() {
+            have_same_format.write(false);
+        }
+
+        return;
+    }
+
+    ffone_raw_audio_queue_read_bytes(queue, bytes, nbytes, ptr::null_mut());
+}
+
+pub struct RawAudioQueueRC(*mut RawAudioQueue);
+
+impl RawAudioQueueRC {
+    pub fn new() -> Option<Self> {
+        let queue = unsafe { ffone_raw_audio_queue_new() };
+
+        if !queue.is_null() {
+            Some(Self(queue))
+        } else {
+            None
         }
     }
 
-    nbytes.write(0);
-}
-
-pub struct RawAudioQueueRC(*mut CRawAudioQueueRC);
-
-impl RawAudioQueueRC {
-    pub fn new(queue: RawAudioQueue) -> Self {
-        Self(CRawAudioQueueRC::new(queue))
+    pub fn into_raw(self) -> *mut RawAudioQueue {
+        ManuallyDrop::new(self).0
     }
 
     pub fn push_buffer(&self, buffer: RawAudioBuffer) {
         unsafe {
-            CRawAudioQueueRC::push_buffer(self.0, buffer);
+            (*self.0).push_buffer(buffer);
         }
     }
 
-    pub fn read_bytes(&self, bytes: &mut [u8]) -> Option<(usize, RawAudioFormat)> {
-        let mut nbytes = bytes.len();
-        let mut format = RawAudioFormat::default();
+    pub fn read_bytes(&self, bytes: &mut [u8]) -> (usize, Option<RawAudioFormat>) {
+        let popped_bytes = unsafe { (*self.0).pop_bytes(bytes.len()) };
 
-        unsafe {
-            ffone_raw_audio_queue_read_bytes(
-                self.0,
-                bytes.as_mut_ptr(),
-                &mut nbytes as *mut _,
-                &mut format as *mut _,
-            );
+        if let Some((available_bytes, format)) = popped_bytes {
+            let available_nbytes = available_bytes.len();
+            bytes[..available_nbytes].clone_from_slice(&available_bytes);
+
+            return (available_nbytes, Some(format));
         }
 
-        (nbytes > 0).then_some((nbytes, format))
+        (0, None)
     }
 
-    pub fn read_bytes_formatted(&self, bytes: &mut [u8], format: RawAudioFormat) -> Option<usize> {
-        let mut nbytes = bytes.len();
+    pub fn read_bytes_formatted(&self, bytes: &mut [u8], format: RawAudioFormat) -> (usize, bool) {
+        let buffer_format = unsafe { (*self.0).front_buffer_format() };
 
-        unsafe {
-            ffone_raw_audio_queue_read_bytes_formatted(
-                self.0,
-                bytes.as_mut_ptr(),
-                &mut nbytes as *mut _,
-                format,
-            );
+        if buffer_format.is_some_and(|buffer_format| buffer_format == format) {
+            let (nbytes, _) = self.read_bytes(bytes);
+
+            return (nbytes, true);
         }
 
-        (nbytes > 0).then_some(nbytes)
+        (0, false)
     }
 }
 
 impl Clone for RawAudioQueueRC {
     fn clone(&self) -> Self {
-        Self(unsafe { ffone_raw_audio_queue_ref(self.0) })
+        Self(unsafe { ffone_rc_ref(self.0.cast()).cast() })
     }
 }
 
 impl Drop for RawAudioQueueRC {
     fn drop(&mut self) {
         unsafe {
-            ffone_raw_audio_queue_unref(self.0);
+            ffone_rc_unref(self.0.cast());
         }
     }
 }
