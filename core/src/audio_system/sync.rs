@@ -9,9 +9,6 @@ use crate::util::{ControlFlow, Element, Runnable};
 use super::audio::{AudioShortenerTask, Timestamp, TimestampedRawAudioBuffer};
 use super::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
 
-const MIN_DELAY: Duration = Duration::from_nanos(0);
-const MAX_DELAY: Duration = Duration::from_millis(40);
-
 pub(super) struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
@@ -64,7 +61,8 @@ impl Runnable for Synchronizer {
 
             let play_time = ts_buf.start().as_dur() - offset.as_dur();
             let delay = base.elapsed() - play_time;
-            let task = if delay >= MAX_DELAY {
+            let duration = ts_buf.duration();
+            let task = if delay >= duration / 2 {
                 let sample_duration = ts_buf.sample_duration();
                 let no_samples = delay.as_nanos() / sample_duration.as_nanos();
 
@@ -72,9 +70,7 @@ impl Runnable for Synchronizer {
                     audio: ts_buf.into_raw(),
                     no_samples: no_samples as usize,
                 }
-            } else if delay >= MIN_DELAY {
-                let delay = base.elapsed() - play_time;
-                let duration = ts_buf.duration();
+            } else if delay >= Duration::ZERO {
                 let rate = 1.0 / (1.0 - delay.as_nanos() as f64 / duration.as_nanos() as f64);
 
                 AudioShortenerTask::Downsample {

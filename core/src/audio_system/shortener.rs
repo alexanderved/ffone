@@ -93,11 +93,15 @@ impl AudioShortener {
         audio
     }
 
-    fn discard(&self, mut audio: RawAudioBuffer, no_samples: usize) -> RawAudioBuffer {
+    fn discard(&self, mut audio: RawAudioBuffer, no_samples: usize) -> Option<RawAudioBuffer> {
         let no_bytes = audio.format().no_bytes();
         vec_truncate_front(audio.as_vec_mut(), no_samples * no_bytes);
 
-        audio
+        if audio.len() > 0 {
+            return Some(audio);
+        }
+
+        None
     }
 }
 
@@ -114,7 +118,10 @@ impl Runnable for AudioShortener {
             let new_audio = match cmd {
                 AudioShortenerTask::Downsample { audio, rate } => self.downsample(audio, rate),
                 AudioShortenerTask::Discard { audio, no_samples } => {
-                    self.discard(audio, no_samples)
+                    match self.discard(audio, no_samples) {
+                        Some(new_audio) => new_audio,
+                        None => continue,
+                    }
                 }
             };
 

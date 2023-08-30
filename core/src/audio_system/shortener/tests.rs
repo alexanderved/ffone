@@ -163,5 +163,10 @@ fn test_discard() {
     let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
     let discraded_audio = vec![4, 5, 6, 1, 2, 3];
 
-    assert_eq!(shortener.discard(audio, 3).as_slice(), discraded_audio,);
+    assert_eq!(shortener.discard(audio, 3).unwrap().as_slice(), discraded_audio);
+
+    let data = vec![1, 2, 3];
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+
+    assert!(shortener.discard(audio, 3).is_none());
 }
