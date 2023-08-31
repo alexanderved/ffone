@@ -1,18 +1,16 @@
 pub mod audio;
-pub mod audio_decoder;
-pub mod element;
-mod pipeline;
+pub mod pipeline;
 pub mod queue;
-mod shortener;
-mod sync;
-pub mod virtual_microphone;
+pub mod element;
 
-use audio_decoder::*;
 use element::*;
 use pipeline::*;
-use shortener::*;
-use sync::*;
-use virtual_microphone::*;
+use pipeline::{
+    audio_decoder::*,
+    virtual_microphone::*,
+    sync::*,
+    shortener::*,
+};
 
 use crate::util::*;
 use crate::*;

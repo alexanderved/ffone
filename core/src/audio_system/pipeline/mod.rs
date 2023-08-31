@@ -1,11 +1,17 @@
+pub mod audio_decoder;
+pub mod virtual_microphone;
+pub mod sync;
+pub mod shortener;
+
+use audio_decoder::*;
+use shortener::AudioShortener;
+use sync::*;
+use virtual_microphone::*;
+
+use super::element::{AsAudioSink, AsAudioSource};
+
 use crate::error;
 use crate::util::{ControlFlow, Runnable, RunnableStateMachine};
-
-use super::audio_decoder::*;
-use super::element::{AsAudioSink, AsAudioSource};
-use super::shortener::AudioShortener;
-use super::sync::*;
-use super::virtual_microphone::*;
 
 macro_rules! add_pipeline_element {
     (

@@ -6,10 +6,10 @@ use mueue::*;
 use crate::error;
 use crate::util::{ControlFlow, Element, Runnable};
 
-use super::audio::{AudioShortenerTask, Timestamp, TimestampedRawAudioBuffer};
-use super::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
+use crate::audio_system::audio::{AudioShortenerTask, Timestamp, TimestampedRawAudioBuffer};
+use crate::audio_system::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
 
-pub(super) struct Synchronizer {
+pub(in crate::audio_system) struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
     output: Option<MessageSender<AudioShortenerTask>>,
@@ -20,7 +20,7 @@ pub(super) struct Synchronizer {
 }
 
 impl Synchronizer {
-    pub(super) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
+    pub(in crate::audio_system) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
         Self {
             send,
             input: None,

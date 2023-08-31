@@ -1,5 +1,5 @@
-use super::audio::*;
-use super::element::*;
+use crate::audio_system::audio::*;
+use crate::audio_system::element::*;
 use crate::util::RunnableStateMachine;
 
 pub type VirtualMicrophoneStateMachine = RunnableStateMachine<Box<dyn VirtualMicrophone>>;

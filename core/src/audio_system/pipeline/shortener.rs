@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests;
 
-use super::audio::*;
-use super::element::*;
+use crate::audio_system::audio::*;
+use crate::audio_system::element::*;
 
 use crate::error;
 use crate::util::*;
@@ -14,7 +14,7 @@ use std::ptr;
 
 use mueue::*;
 
-pub(super) struct AudioShortener {
+pub(in crate::audio_system) struct AudioShortener {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<AudioShortenerTask>>,
     output: Option<MessageSender<RawAudioBuffer>>,
@@ -23,7 +23,7 @@ pub(super) struct AudioShortener {
 }
 
 impl AudioShortener {
-    pub(super) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
+    pub(in crate::audio_system) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
         Self {
             send,
             input: None,

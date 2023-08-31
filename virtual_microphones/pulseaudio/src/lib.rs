@@ -2,7 +2,7 @@ use core::audio_system::audio::RawAudioBuffer;
 use core::audio_system::element::AudioSink;
 use core::audio_system::element::AudioSystemElementMessage;
 use core::audio_system::queue::RawAudioQueue;
-use core::audio_system::virtual_microphone::*;
+use core::audio_system::pipeline::virtual_microphone::*;
 use core::error;
 use core::mueue::*;
 use core::util::*;
