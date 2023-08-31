@@ -16,10 +16,16 @@ package = "ffone_gst_audio_decoder"
 version = "0.1.0"
 path = "audio_decoders/gstreamer"
 
+[target.'cfg(target_family = "unix")'.dependencies.pulseaudio]
+package = "ffone_pa_virtual_microphone"
+version = "0.1.0"
+path = "virtual_microphones/pulseaudio"
+
 [workspace]
 members = [
     "core",
     "ffi",
     "devices/lan",
-    "audio_decoders/gstreamer"
+    "audio_decoders/gstreamer",
+    "virtual_microphones/pulseaudio"
 ]

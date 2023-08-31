@@ -1,0 +1,15 @@
+[package]
+name = "ffone_pa_virtual_microphone"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+core = { package = "ffone_core", version = "0.1.0", path = "../../core" }
+ffi = { package = "ffone_ffi", version = "0.1.0", path = "../../ffi" }
+libc = "0.2.147"
+
+[build-dependencies]
+cc = "1.0.79"
+pkg-config = "0.3.27"

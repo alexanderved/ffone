@@ -1,5 +1,28 @@
 {
     "rust-analyzer.linkedProjects": [
         "./devices/lan/Cargo.toml"
-    ]
+    ],
+    "files.associations": {
+        "pa_ctx.h": "c",
+        "typeinfo": "c",
+        "stdarg.h": "c",
+        "stdio.h": "c",
+        "util.h": "c",
+        "stdlib.h": "c",
+        "virtual_device.h": "c",
+        "stdint.h": "c",
+        "string.h": "c",
+        "rc.h": "c",
+        "unistd.h": "c",
+        "array": "c",
+        "compare": "c",
+        "functional": "c",
+        "ostream": "c",
+        "ranges": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c",
+        "audio.h": "c",
+        "queue.h": "c"
+    }
 }
