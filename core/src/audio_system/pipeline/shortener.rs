@@ -16,7 +16,7 @@ use mueue::*;
 
 pub(in crate::audio_system) struct AudioShortener {
     send: MessageSender<AudioSystemElementMessage>,
-    input: Option<MessageReceiver<AudioShortenerTask>>,
+    input: Option<MessageReceiver<ShortenableRawAudioBuffer>>,
     output: Option<MessageSender<RawAudioBuffer>>,
 
     temp_samples: UnsafeCell<Vec<Sample>>,
@@ -33,30 +33,39 @@ impl AudioShortener {
         }
     }
 
-    fn downsample(&self, mut audio: RawAudioBuffer, mut rate: f64) -> RawAudioBuffer {
-        if (rate - 1.0).abs() <= f64::EPSILON {
+    fn downsample(
+        &self,
+        mut audio: RawAudioBuffer,
+        mut desired_no_samples: usize,
+    ) -> RawAudioBuffer {
+        let mut no_samples = audio.no_samples();
+
+        if no_samples == desired_no_samples {
             return audio;
         }
 
-        assert!(rate > 1.0, "The downsampling rate must be greater than 1.0");
+        assert!(
+            desired_no_samples < no_samples,
+            "The downsampling rate must be greater than 1.0"
+        );
 
         let no_bytes = audio.format().no_bytes();
-        let mut no_samples = audio.no_samples();
-        let mut desired_no_samples = (no_samples as f64 / rate) as usize;
 
         let mut next_sample_ptr = audio.as_slice_mut().as_mut_ptr();
-
         let mut bytes = [0; 4];
         let temp_samples = unsafe { &mut *self.temp_samples.get() };
 
         for sample in SampleIter::new(&audio) {
+            let rate = no_samples as f64 / desired_no_samples as f64;
             let min_rate = rate.floor() as usize;
             if min_rate > 1 {
                 temp_samples.push(sample);
 
                 if temp_samples.len() == min_rate {
+                    println!("{rate} {min_rate}");
+                    
                     let sample_sum = temp_samples.drain(..).sum::<Sample>();
-                    let average_sample = sample_sum / min_rate as u8;
+                    let average_sample = sample_sum / min_rate;
 
                     average_sample.copy_bytes_into(&mut bytes);
                     unsafe {
@@ -72,12 +81,11 @@ impl AudioShortener {
 
                 no_samples -= min_rate;
                 desired_no_samples -= 1;
-                rate = no_samples as f64 / desired_no_samples as f64;
             }
         }
 
         if !temp_samples.is_empty() {
-            let samples_len = temp_samples.len() as u8;
+            let samples_len = temp_samples.len();
             let average_sample = temp_samples.drain(..).sum::<Sample>() / samples_len;
 
             average_sample.copy_bytes_into(&mut bytes);
@@ -114,15 +122,20 @@ impl Runnable for AudioShortener {
             return Ok(());
         };
 
-        for cmd in input.iter() {
-            let new_audio = match cmd {
-                AudioShortenerTask::Downsample { audio, rate } => self.downsample(audio, rate),
-                AudioShortenerTask::Discard { audio, no_samples } => {
-                    match self.discard(audio, no_samples) {
-                        Some(new_audio) => new_audio,
-                        None => continue,
-                    }
+        for audio in input.iter() {
+            let no_samples = audio.no_samples();
+            let desired_no_samples = audio.desired_no_samples();
+            let raw_audio = audio.into_raw();
+
+            let new_audio = if desired_no_samples <= no_samples * 3 / 4 {
+                match self.discard(raw_audio, desired_no_samples) {
+                    Some(new_audio) => new_audio,
+                    None => continue,
                 }
+            } else if desired_no_samples <= no_samples {
+                self.downsample(raw_audio, desired_no_samples)
+            } else {
+                todo!()
             };
 
             let _ = output.send(new_audio);
@@ -144,8 +157,8 @@ impl Element for AudioShortener {
     }
 }
 
-impl AudioSink<AudioShortenerTask> for AudioShortener {
-    fn set_input(&mut self, input: MessageReceiver<AudioShortenerTask>) {
+impl AudioSink<ShortenableRawAudioBuffer> for AudioShortener {
+    fn set_input(&mut self, input: MessageReceiver<ShortenableRawAudioBuffer>) {
         self.input = Some(input);
     }
 
@@ -164,7 +177,7 @@ impl AudioSource<RawAudioBuffer> for AudioShortener {
     }
 }
 
-impl AudioFilter<AudioShortenerTask, RawAudioBuffer> for AudioShortener {}
+impl AudioFilter<ShortenableRawAudioBuffer, RawAudioBuffer> for AudioShortener {}
 
 #[derive(Debug)]
 enum Sample {
@@ -276,14 +289,14 @@ impl ops::Add for Sample {
     }
 }
 
-impl ops::Div<u8> for Sample {
+impl ops::Div<usize> for Sample {
     type Output = Self;
 
-    fn div(self, rhs: u8) -> Self::Output {
+    fn div(self, rhs: usize) -> Self::Output {
         use Sample::*;
 
         match self {
-            U8(a) => U8(a / rhs),
+            U8(a) => U8(a / rhs as u8),
             S16LE(a) => S16LE(a / rhs as i16),
             S16BE(a) => S16BE(a / rhs as i16),
             S24LE(a) => S24LE(a / rhs as i32),

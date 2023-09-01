@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use mueue::*;
 
+use crate::util::ClockTime;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodedAudioBuffer(pub Vec<u8>);
 
@@ -106,45 +108,16 @@ impl RawAudioBuffer {
 
 impl Message for RawAudioBuffer {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Timestamp(Duration);
-
-impl Timestamp {
-    pub fn new(dur: Duration) -> Self {
-        Self(dur)
-    }
-
-    pub fn as_dur(&self) -> Duration {
-        self.0
-    }
-
-    pub fn as_nanos(&self) -> u128 {
-        self.0.as_nanos()
-    }
-
-    pub fn as_micros(&self) -> u128 {
-        self.0.as_micros()
-    }
-
-    pub fn as_millis(&self) -> u128 {
-        self.0.as_millis()
-    }
-
-    pub fn as_secs(&self) -> u64 {
-        self.0.as_secs()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampedRawAudioBuffer {
     raw: RawAudioBuffer,
 
-    start: Timestamp,
-    stop: Timestamp,
+    start: ClockTime,
+    stop: ClockTime,
 }
 
 impl TimestampedRawAudioBuffer {
-    pub fn new(raw: RawAudioBuffer, start: Timestamp, stop: Timestamp) -> Self {
+    pub fn new(raw: RawAudioBuffer, start: ClockTime, stop: ClockTime) -> Self {
         Self { raw, start, stop }
     }
 
@@ -156,11 +129,15 @@ impl TimestampedRawAudioBuffer {
         self.raw
     }
 
-    pub fn start(&self) -> Timestamp {
+    pub fn no_samples(&self) -> usize {
+        self.raw.no_samples()
+    }
+
+    pub fn start(&self) -> ClockTime {
         self.start
     }
 
-    pub fn stop(&self) -> Timestamp {
+    pub fn stop(&self) -> ClockTime {
         self.stop
     }
 
@@ -178,15 +155,30 @@ impl TimestampedRawAudioBuffer {
 
 impl Message for TimestampedRawAudioBuffer {}
 
-pub enum AudioShortenerTask {
-    Downsample {
-        audio: RawAudioBuffer,
-        rate: f64,
-    },
-    Discard {
-        audio: RawAudioBuffer,
-        no_samples: usize,
-    },
+pub struct ShortenableRawAudioBuffer {
+    raw: RawAudioBuffer,
+    desired_no_samples: usize,
 }
 
-impl Message for AudioShortenerTask {}
+impl ShortenableRawAudioBuffer {
+    pub fn new(raw: RawAudioBuffer, desired_no_samples: usize) -> Self {
+        Self {
+            raw,
+            desired_no_samples,
+        }
+    }
+
+    pub fn into_raw(self) -> RawAudioBuffer {
+        self.raw
+    }
+
+    pub fn no_samples(&self) -> usize {
+        self.raw.no_samples()
+    }
+
+    pub fn desired_no_samples(&self) -> usize {
+        self.desired_no_samples
+    }
+}
+
+impl Message for ShortenableRawAudioBuffer {}

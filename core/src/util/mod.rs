@@ -1,14 +1,16 @@
+mod clock;
 mod component;
 mod element;
+mod ring_buffer;
 mod runnable;
 
+pub use clock::*;
 pub use component::*;
 pub use element::*;
+pub use ring_buffer::*;
 pub use runnable::*;
 
-use std::cell::Cell;
 use std::ptr;
-use std::time::*;
 
 pub fn vec_truncate_front<T>(vec: &mut Vec<T>, len: usize) {
     if len == 0 {
@@ -31,41 +33,6 @@ pub fn vec_truncate_front<T>(vec: &mut Vec<T>, len: usize) {
             ptr::copy(vec_ptr.add(len), vec_ptr, remaining_len);
         }
         vec.set_len(remaining_len);
-    }
-}
-
-pub struct Timer {
-    pub start: Cell<Instant>,
-    interval: Duration,
-}
-
-impl Timer {
-    pub fn new(interval: Duration) -> Self {
-        Self {
-            start: Cell::new(Instant::now()),
-            interval,
-        }
-    }
-
-    pub fn interval(&self) -> Duration {
-        self.interval
-    }
-
-    pub fn set_interval(&mut self, interval: Duration) {
-        self.interval = interval;
-    }
-
-    pub fn restart(&self) {
-        self.start.set(Instant::now());
-    }
-
-    pub fn is_time_out(&self) -> bool {
-        if self.start.get().elapsed() > self.interval {
-            self.start.set(Instant::now());
-            return true;
-        }
-
-        false
     }
 }
 

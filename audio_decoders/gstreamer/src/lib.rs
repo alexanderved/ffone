@@ -3,8 +3,8 @@ mod gst_context;
 use gst_context::GstContext;
 
 use core::audio_system::audio::{EncodedAudioBuffer, EncodedAudioInfo, TimestampedRawAudioBuffer};
-use core::audio_system::pipeline::audio_decoder::{AudioDecoder, AudioDecoderInfo};
 use core::audio_system::element::{AudioSource, AudioSystemElementMessage};
+use core::audio_system::pipeline::audio_decoder::{AudioDecoder, AudioDecoderInfo};
 use core::error;
 use core::mueue::*;
 use core::util::{ControlFlow, Element, Runnable};

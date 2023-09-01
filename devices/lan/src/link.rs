@@ -11,15 +11,14 @@ use core::device::element::DeviceSystemElementMessage;
 use core::device::link::*;
 use core::device::*;
 use core::error;
+use core::util::ClockTime;
 use core::util::Element;
 use core::util::{ControlFlow, Runnable, Timer};
 
 use core::mueue::*;
 
-use std::time::Duration;
-
-const PING_INTERVAL: Duration = Duration::from_secs(5);
-const PONG_INTERVAL: Duration = Duration::from_secs(10);
+const PING_INTERVAL: ClockTime = ClockTime::from_secs(5);
+const PONG_INTERVAL: ClockTime = ClockTime::from_secs(10);
 
 pub struct LanLink {
     send: Option<MessageSender<DeviceSystemElementMessage>>,
@@ -87,7 +86,7 @@ impl LanLink {
     }
 
     fn on_pong_received(&self) {
-        self.pong_timer.restart();
+        self.pong_timer.reset();
     }
 
     fn on_info_received(&mut self, info: DeviceInfo) {

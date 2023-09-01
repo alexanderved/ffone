@@ -3,9 +3,9 @@ mod tests;
 
 use core::audio_system::audio::{
     AudioCodec, AudioFormat, EncodedAudioBuffer, EncodedAudioInfo, RawAudioBuffer, RawAudioFormat,
-    Timestamp, TimestampedRawAudioBuffer,
+    TimestampedRawAudioBuffer,
 };
-use std::time::Duration;
+use core::util::ClockTime;
 
 use gst::{
     prelude::{Cast, GstBinExtManual},
@@ -210,7 +210,7 @@ fn raw_audio_buffer_from_sample(sample: &gst::Sample) -> Option<RawAudioBuffer> 
     Some(RawAudioBuffer::new(data, format))
 }
 
-fn timestamps_from_sample(sample: &gst::Sample) -> Option<(Timestamp, Timestamp)> {
+fn timestamps_from_sample(sample: &gst::Sample) -> Option<(ClockTime, ClockTime)> {
     let buffer = sample.buffer()?;
     let buf_start = buffer.dts_or_pts()?;
     let buf_stop = buf_start + buffer.duration()?;
@@ -223,8 +223,8 @@ fn timestamps_from_sample(sample: &gst::Sample) -> Option<(Timestamp, Timestamp)
         return None;
     };
 
-    let start_ts = Timestamp::new(Duration::from_nanos(start.nseconds()));
-    let stop_ts = Timestamp::new(Duration::from_nanos(stop.nseconds()));
+    let start_ts = ClockTime::from_nanos(start.nseconds());
+    let stop_ts = ClockTime::from_nanos(stop.nseconds());
 
     Some((start_ts, stop_ts))
 }

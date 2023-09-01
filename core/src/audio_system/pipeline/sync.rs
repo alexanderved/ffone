@@ -1,35 +1,61 @@
+use crate::error;
+use crate::util::{
+    Clock, ClockTime, ControlFlow, Element, Runnable, SlaveClock, SystemClock, Timer,
+    OBSERVATIONS_INTERVAL,
+};
+
+use crate::audio_system::audio::{ShortenableRawAudioBuffer, TimestampedRawAudioBuffer};
+use crate::audio_system::element::{
+    AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage,
+};
+
 use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::rc::Rc;
+use std::sync::Arc;
 
 use mueue::*;
-
-use crate::error;
-use crate::util::{ControlFlow, Element, Runnable};
-
-use crate::audio_system::audio::{AudioShortenerTask, Timestamp, TimestampedRawAudioBuffer};
-use crate::audio_system::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
 
 pub(in crate::audio_system) struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
-    output: Option<MessageSender<AudioShortenerTask>>,
+    output: Option<MessageSender<ShortenableRawAudioBuffer>>,
 
-    base: Option<Instant>,
-    offset: Option<Timestamp>,
+    sys_clock: Arc<SystemClock>,
+    virtual_mic_clock: Option<Rc<dyn SlaveClock>>,
+    virtual_mic_clock_update_timer: Timer,
+
+    offset: Option<ClockTime>,
+    first_buffer_start_timestamp: Option<ClockTime>,
+
     queue: VecDeque<TimestampedRawAudioBuffer>,
 }
 
 impl Synchronizer {
-    pub(in crate::audio_system) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
+    pub(in crate::audio_system) fn new(
+        send: MessageSender<AudioSystemElementMessage>,
+        sys_clock: Arc<SystemClock>,
+    ) -> Self {
         Self {
             send,
             input: None,
             output: None,
 
-            base: None,
+            sys_clock,
+            virtual_mic_clock: None,
+            virtual_mic_clock_update_timer: Timer::new(OBSERVATIONS_INTERVAL),
+
             offset: None,
+            first_buffer_start_timestamp: None,
+
             queue: VecDeque::new(),
         }
+    }
+
+    pub(in crate::audio_system) fn set_virtual_microphone_clock(
+        &mut self,
+        virtual_mic_clock: Rc<dyn SlaveClock>,
+    ) {
+        self.virtual_mic_clock = Some(virtual_mic_clock);
     }
 }
 
@@ -42,47 +68,56 @@ impl Runnable for Synchronizer {
             return Ok(());
         };
 
+        if let Some(virtual_mic_clock) = self.virtual_mic_clock.as_deref() {
+            if self.virtual_mic_clock_update_timer.is_time_out() {
+                virtual_mic_clock.record_observation();
+            }
+        }
+
         self.queue.extend(input.iter());
         while let Some(ts_buf) = self.queue.pop_front() {
-            let base = match self.base {
-                Some(base) => base,
-                None => {
-                    self.base = Some(Instant::now());
-                    self.base.unwrap()
-                }
-            };
             let offset = match self.offset {
                 Some(offset) => offset,
                 None => {
-                    self.offset = Some(ts_buf.start());
+                    self.offset = Some(self.sys_clock.get_time());
                     self.offset.unwrap()
                 }
             };
-
-            let play_time = ts_buf.start().as_dur() - offset.as_dur();
-            let delay = base.elapsed() - play_time;
-            let duration = ts_buf.duration();
-            let task = if delay >= duration / 2 {
-                let sample_duration = ts_buf.sample_duration();
-                let no_samples = delay.as_nanos() / sample_duration.as_nanos();
-
-                AudioShortenerTask::Discard {
-                    audio: ts_buf.into_raw(),
-                    no_samples: no_samples as usize,
+            let first_buffer_start_timestamp = match self.first_buffer_start_timestamp {
+                Some(first_buffer_start_timestamp) => first_buffer_start_timestamp,
+                None => {
+                    self.first_buffer_start_timestamp = Some(ts_buf.start());
+                    self.first_buffer_start_timestamp.unwrap()
                 }
-            } else if delay >= Duration::ZERO {
-                let rate = 1.0 / (1.0 - delay.as_nanos() as f64 / duration.as_nanos() as f64);
+            };
 
-                AudioShortenerTask::Downsample {
-                    audio: ts_buf.into_raw(),
-                    rate,
+            let elapsed = self.sys_clock.get_time();
+            let desired_play_date = ts_buf.start() + offset - first_buffer_start_timestamp;
+
+            if elapsed >= desired_play_date {
+                let mut duration = ClockTime::from_dur(ts_buf.duration());
+                let sample_duration = ClockTime::from_dur(ts_buf.sample_duration());
+
+                if let Some(virtual_mic_clock) = self.virtual_mic_clock.as_deref() {
+                    let calibration_info = virtual_mic_clock.get_calibration_info();
+
+                    let sys_play_start = elapsed;
+                    let sys_play_stop = elapsed + duration;
+
+                    let play_start = sys_play_start.to_slave_time(calibration_info);
+                    let play_stop = sys_play_stop.to_slave_time(calibration_info);
+
+                    duration = play_stop - play_start;
                 }
+
+                let desired_no_samples = (duration / sample_duration).as_nanos() as usize;
+                let buf = ShortenableRawAudioBuffer::new(ts_buf.into_raw(), desired_no_samples);
+
+                let _ = output.send(buf);
             } else {
                 self.queue.push_front(ts_buf);
                 break;
             };
-
-            let _ = output.send(task);
         }
 
         Ok(())
@@ -111,8 +146,8 @@ impl AudioSink<TimestampedRawAudioBuffer> for Synchronizer {
     }
 }
 
-impl AudioSource<AudioShortenerTask> for Synchronizer {
-    fn set_output(&mut self, output: MessageSender<AudioShortenerTask>) {
+impl AudioSource<ShortenableRawAudioBuffer> for Synchronizer {
+    fn set_output(&mut self, output: MessageSender<ShortenableRawAudioBuffer>) {
         self.output = Some(output);
     }
 
@@ -121,4 +156,4 @@ impl AudioSource<AudioShortenerTask> for Synchronizer {
     }
 }
 
-impl AudioFilter<TimestampedRawAudioBuffer, AudioShortenerTask> for Synchronizer {}
+impl AudioFilter<TimestampedRawAudioBuffer, ShortenableRawAudioBuffer> for Synchronizer {}

@@ -1,7 +1,7 @@
 pub mod audio_decoder;
-pub mod virtual_microphone;
-pub mod sync;
 pub mod shortener;
+pub mod sync;
+pub mod virtual_microphone;
 
 use audio_decoder::*;
 use shortener::AudioShortener;

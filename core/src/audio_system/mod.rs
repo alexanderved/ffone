@@ -1,21 +1,17 @@
 pub mod audio;
+pub mod element;
 pub mod pipeline;
 pub mod queue;
-pub mod element;
 
 use element::*;
 use pipeline::*;
-use pipeline::{
-    audio_decoder::*,
-    virtual_microphone::*,
-    sync::*,
-    shortener::*,
-};
+use pipeline::{audio_decoder::*, shortener::*, sync::*, virtual_microphone::*};
 
 use crate::util::*;
 use crate::*;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
 
@@ -56,8 +52,10 @@ impl AudioSystem {
     ) -> Self {
         let (notification_send, notification_recv) = unidirectional_queue();
 
+        let sys_clock = Arc::new(SystemClock::new());
+
         let mut audio_decs = collect_audio_decs(audio_decs_builders, notification_send.clone());
-        let sync = Synchronizer::new(notification_send.clone());
+        let sync = Synchronizer::new(notification_send.clone(), sys_clock);
         let shortener = AudioShortener::new(notification_send.clone());
         let mut virtual_mics =
             collect_virtual_microphones(virtual_mics_builders, notification_send);
