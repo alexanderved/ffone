@@ -155,12 +155,12 @@ impl TimestampedRawAudioBuffer {
 
 impl Message for TimestampedRawAudioBuffer {}
 
-pub struct ShortenableRawAudioBuffer {
+pub struct ResizableRawAudioBuffer {
     raw: RawAudioBuffer,
     desired_no_samples: usize,
 }
 
-impl ShortenableRawAudioBuffer {
+impl ResizableRawAudioBuffer {
     pub fn new(raw: RawAudioBuffer, desired_no_samples: usize) -> Self {
         Self {
             raw,
@@ -181,4 +181,4 @@ impl ShortenableRawAudioBuffer {
     }
 }
 
-impl Message for ShortenableRawAudioBuffer {}
+impl Message for ResizableRawAudioBuffer {}

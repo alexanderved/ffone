@@ -1,12 +1,19 @@
 use super::*;
 
-use mueue::*;
+#[test]
+fn test_discard() {
+    let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let discraded_audio = vec![4, 5, 6, 1, 2, 3];
+
+    assert_eq!(
+        discard(audio, 2).as_slice(),
+        discraded_audio
+    );
+}
 
 #[test]
 fn test_downsample_int_rate() {
-    let (send, _) = unidirectional_queue();
-    let shortener = AudioShortener::new(send);
-
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
 
     let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
@@ -25,7 +32,7 @@ fn test_downsample_int_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples / 2).as_slice(),
+        downsample(audio, no_samples / 2).as_slice(),
         downsampled_audio
     );
 
@@ -45,7 +52,7 @@ fn test_downsample_int_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples / 2).as_slice(),
+        downsample(audio, no_samples / 2).as_slice(),
         downsampled_audio
     );
 
@@ -64,7 +71,7 @@ fn test_downsample_int_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples / 2).as_slice(),
+        downsample(audio, no_samples / 2).as_slice(),
         downsampled_audio
     );
 
@@ -81,16 +88,13 @@ fn test_downsample_int_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples / 2).as_slice(),
+        downsample(audio, no_samples / 2).as_slice(),
         downsampled_audio
     );
 }
 
 #[test]
 fn test_downsample_real_rate() {
-    let (send, _) = unidirectional_queue();
-    let shortener = AudioShortener::new(send);
-
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
 
     let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
@@ -107,7 +111,7 @@ fn test_downsample_real_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples * 2 / 3).as_slice(),
+        downsample(audio, no_samples * 2 / 3).as_slice(),
         downsampled_audio
     );
 
@@ -125,7 +129,7 @@ fn test_downsample_real_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples * 2 / 3).as_slice(),
+        downsample(audio, no_samples * 2 / 3).as_slice(),
         downsampled_audio
     );
 
@@ -145,7 +149,7 @@ fn test_downsample_real_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples * 2 / 3).as_slice(),
+        downsample(audio, no_samples * 2 / 3).as_slice(),
         downsampled_audio
     );
 
@@ -163,27 +167,17 @@ fn test_downsample_real_rate() {
     };
     let no_samples = audio.no_samples();
     assert_eq!(
-        shortener.downsample(audio, no_samples * 2 / 3).as_slice(),
+        downsample(audio, no_samples * 2 / 3).as_slice(),
         downsampled_audio
     );
 }
 
 #[test]
-fn test_discard() {
-    let (send, _) = unidirectional_queue();
-    let shortener = AudioShortener::new(send);
-
-    let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
+fn test_upsample_int_rate() {
+    let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
     let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
-    let discraded_audio = vec![4, 5, 6, 1, 2, 3];
+    let desired_no_samples = audio.no_samples() * 3 / 2;
 
-    assert_eq!(
-        shortener.discard(audio, 3).unwrap().as_slice(),
-        discraded_audio
-    );
-
-    let data = vec![1, 2, 3];
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
-
-    assert!(shortener.discard(audio, 3).is_none());
+    let new_audio = upsample(audio, desired_no_samples);
+    println!("{}: {:?}", new_audio.no_samples(), new_audio);
 }

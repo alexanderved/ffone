@@ -5,7 +5,7 @@ pub mod queue;
 
 use element::*;
 use pipeline::*;
-use pipeline::{audio_decoder::*, shortener::*, sync::*, virtual_microphone::*};
+use pipeline::{audio_decoder::*, resizer::*, sync::*, virtual_microphone::*};
 
 use crate::util::*;
 use crate::*;
@@ -56,14 +56,14 @@ impl AudioSystem {
 
         let mut audio_decs = collect_audio_decs(audio_decs_builders, notification_send.clone());
         let sync = Synchronizer::new(notification_send.clone(), sys_clock);
-        let shortener = AudioShortener::new(notification_send.clone());
+        let resizer = AudioResizer::new(notification_send.clone());
         let mut virtual_mics =
             collect_virtual_microphones(virtual_mics_builders, notification_send);
 
         let mut pipeline = AudioPipeline::new();
         pipeline.set_audio_decoder(take_first_audio_decoder(&mut audio_decs));
         pipeline.set_synchronizer(sync);
-        pipeline.set_shortener(shortener);
+        pipeline.set_resizer(resizer);
         pipeline.set_virtual_microphone(take_first_virtual_microphone(&mut virtual_mics));
 
         Self {

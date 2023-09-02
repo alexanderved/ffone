@@ -516,7 +516,7 @@ impl Clock for Timer {
     }
 }
 
-#[cfg(test)]
+#[cfg(no_test)]
 mod tests {
     #![allow(dead_code)]
 

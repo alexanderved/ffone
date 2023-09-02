@@ -1,10 +1,10 @@
 pub mod audio_decoder;
-pub mod shortener;
+pub mod resizer;
 pub mod sync;
 pub mod virtual_microphone;
 
 use audio_decoder::*;
-use shortener::AudioShortener;
+use resizer::AudioResizer;
 use sync::*;
 use virtual_microphone::*;
 
@@ -18,8 +18,16 @@ macro_rules! add_pipeline_element {
         @element $elem:ty;
         @long_name $func:ident;
         @name $name:ident;
-        $( @prev $prev:ident; )?
-        $( @next $next:ident; )?
+        $(
+            @prev $prev:ident;
+            $( @prev_on_set $prev_on_set:block; )?
+            $( @prev_on_take $prev_on_take:block; )?
+        )?
+        $(
+            @next $next:ident;
+            $( @next_on_set $next_on_set:block; )?
+            $( @next_on_take $next_on_take:block; )?
+        )?
     ) => {
         paste::paste! {
             pub(super) fn [< set_ $func >](&mut self, mut elem: $elem) {
@@ -30,12 +38,14 @@ macro_rules! add_pipeline_element {
                 $(
                     if let Some($prev) = self.$prev.as_mut() {
                         $prev.as_audio_source_mut().chain(elem.as_audio_sink_mut());
+                        $( $prev_on_set; )?
                     }
                 )?
 
                 $(
                     if let Some($next) = self.$next.as_mut() {
                         elem.as_audio_source_mut().chain($next.as_audio_sink_mut());
+                        $( $next_on_set; )?
                     }
                 )?
 
@@ -46,12 +56,14 @@ macro_rules! add_pipeline_element {
                 $(
                     if let Some($prev) = self.$prev.as_mut() {
                         $prev.as_audio_source_mut().unset_output();
+                        $( $prev_on_take; )?
                     }
                 )?
 
                 $(
                     if let Some($next) = self.$next.as_mut() {
                         $next.as_audio_sink_mut().unset_input();
+                        $( $next_on_take; )?
                     }
                 )?
 
@@ -84,7 +96,7 @@ pub(super) type AudioPipelineStateMachine = RunnableStateMachine<AudioPipeline>;
 pub(super) struct AudioPipeline {
     dec: Option<Box<dyn AudioDecoder>>,
     sync: Option<Synchronizer>,
-    shortener: Option<AudioShortener>,
+    resizer: Option<AudioResizer>,
     mic: Option<Box<dyn VirtualMicrophone>>,
 
     is_running: bool,
@@ -96,7 +108,7 @@ impl AudioPipeline {
         Self {
             dec: None,
             sync: None,
-            shortener: None,
+            resizer: None,
             mic: None,
 
             is_running: false,
@@ -115,13 +127,13 @@ impl AudioPipeline {
         @long_name synchronizer;
         @name sync;
         @prev dec;
-        @next shortener;
+        @next resizer;
     }
 
     add_pipeline_element! {
-        @element AudioShortener;
-        @long_name shortener;
-        @name shortener;
+        @element AudioResizer;
+        @long_name resizer;
+        @name resizer;
         @prev sync;
         @next mic;
     }
@@ -130,7 +142,7 @@ impl AudioPipeline {
         @element Box<dyn VirtualMicrophone>;
         @long_name virtual_microphone;
         @name mic;
-        @prev shortener;
+        @prev resizer;
     }
 }
 

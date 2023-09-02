@@ -4,7 +4,7 @@ use crate::util::{
     OBSERVATIONS_INTERVAL,
 };
 
-use crate::audio_system::audio::{ShortenableRawAudioBuffer, TimestampedRawAudioBuffer};
+use crate::audio_system::audio::{ResizableRawAudioBuffer, TimestampedRawAudioBuffer};
 use crate::audio_system::element::{
     AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage,
 };
@@ -18,7 +18,7 @@ use mueue::*;
 pub(in crate::audio_system) struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
-    output: Option<MessageSender<ShortenableRawAudioBuffer>>,
+    output: Option<MessageSender<ResizableRawAudioBuffer>>,
 
     sys_clock: Arc<SystemClock>,
     virtual_mic_clock: Option<Rc<dyn SlaveClock>>,
@@ -111,7 +111,7 @@ impl Runnable for Synchronizer {
                 }
 
                 let desired_no_samples = (duration / sample_duration).as_nanos() as usize;
-                let buf = ShortenableRawAudioBuffer::new(ts_buf.into_raw(), desired_no_samples);
+                let buf = ResizableRawAudioBuffer::new(ts_buf.into_raw(), desired_no_samples);
 
                 let _ = output.send(buf);
             } else {
@@ -146,8 +146,8 @@ impl AudioSink<TimestampedRawAudioBuffer> for Synchronizer {
     }
 }
 
-impl AudioSource<ShortenableRawAudioBuffer> for Synchronizer {
-    fn set_output(&mut self, output: MessageSender<ShortenableRawAudioBuffer>) {
+impl AudioSource<ResizableRawAudioBuffer> for Synchronizer {
+    fn set_output(&mut self, output: MessageSender<ResizableRawAudioBuffer>) {
         self.output = Some(output);
     }
 
@@ -156,4 +156,4 @@ impl AudioSource<ShortenableRawAudioBuffer> for Synchronizer {
     }
 }
 
-impl AudioFilter<TimestampedRawAudioBuffer, ShortenableRawAudioBuffer> for Synchronizer {}
+impl AudioFilter<TimestampedRawAudioBuffer, ResizableRawAudioBuffer> for Synchronizer {}
