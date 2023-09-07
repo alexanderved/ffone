@@ -105,11 +105,23 @@ impl ops::Add for ClockTime {
     }
 }
 
+impl ops::AddAssign for ClockTime {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
 impl ops::Sub for ClockTime {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
         Self(self.0 - rhs.0)
+    }
+}
+
+impl ops::SubAssign for ClockTime {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
     }
 }
 

@@ -10,6 +10,7 @@ use crate::audio_system::element::{
 };
 
 use std::collections::VecDeque;
+use std::mem;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -24,8 +25,9 @@ pub(in crate::audio_system) struct Synchronizer {
     virtual_mic_clock: Option<Rc<dyn SlaveClock>>,
     virtual_mic_clock_update_timer: Timer,
 
-    offset: Option<ClockTime>,
-    first_buffer_start_timestamp: Option<ClockTime>,
+    first_buf_arrival_ts: Option<ClockTime>,
+    first_buf_start_ts: Option<ClockTime>,
+    next_buffer_expected_ts: ClockTime,
 
     queue: VecDeque<TimestampedRawAudioBuffer>,
 }
@@ -44,8 +46,9 @@ impl Synchronizer {
             virtual_mic_clock: None,
             virtual_mic_clock_update_timer: Timer::new(OBSERVATIONS_INTERVAL),
 
-            offset: None,
-            first_buffer_start_timestamp: None,
+            first_buf_arrival_ts: None,
+            first_buf_start_ts: None,
+            next_buffer_expected_ts: ClockTime::ZERO,
 
             queue: VecDeque::new(),
         }
@@ -76,27 +79,28 @@ impl Runnable for Synchronizer {
 
         self.queue.extend(input.iter());
         while let Some(ts_buf) = self.queue.pop_front() {
-            let offset = match self.offset {
-                Some(offset) => offset,
-                None => {
-                    self.offset = Some(self.sys_clock.get_time());
-                    self.offset.unwrap()
-                }
-            };
-            let first_buffer_start_timestamp = match self.first_buffer_start_timestamp {
-                Some(first_buffer_start_timestamp) => first_buffer_start_timestamp,
-                None => {
-                    self.first_buffer_start_timestamp = Some(ts_buf.start());
-                    self.first_buffer_start_timestamp.unwrap()
-                }
-            };
-
             let elapsed = self.sys_clock.get_time();
-            let desired_play_date = ts_buf.start() + offset - first_buffer_start_timestamp;
+
+            let buf_start_ts = ts_buf.start().unwrap_or(self.next_buffer_expected_ts);
+            let buf_duration = ts_buf.duration();
+
+            let first_buf_arrival_ts = *self.first_buf_arrival_ts.get_or_insert(elapsed);
+            let first_buf_start_ts = self.first_buf_start_ts.unwrap_or(ClockTime::ZERO);
+
+            let desired_play_date = buf_start_ts - first_buf_start_ts + first_buf_arrival_ts;
 
             if elapsed >= desired_play_date {
-                let mut duration = ClockTime::from_dur(ts_buf.duration());
-                let sample_duration = ClockTime::from_dur(ts_buf.sample_duration());
+                let mut duration = buf_duration;
+                let sample_duration = ts_buf.sample_duration();
+
+                let next_buffer_expected_ts = mem::replace(
+                    &mut self.next_buffer_expected_ts,
+                    buf_start_ts + buf_duration,
+                );
+
+                if buf_start_ts < next_buffer_expected_ts {
+                    duration -= next_buffer_expected_ts - buf_start_ts;
+                }
 
                 if let Some(virtual_mic_clock) = self.virtual_mic_clock.as_deref() {
                     let calibration_info = virtual_mic_clock.get_calibration_info();
@@ -114,8 +118,13 @@ impl Runnable for Synchronizer {
                 let buf = ResizableRawAudioBuffer::new(ts_buf.into_raw(), desired_no_samples);
 
                 let _ = output.send(buf);
+
+                if self.first_buf_start_ts.is_none() {
+                    self.first_buf_start_ts = Some(buf_start_ts);
+                }
             } else {
                 self.queue.push_front(ts_buf);
+
                 break;
             };
         }

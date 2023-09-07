@@ -73,10 +73,7 @@ fn noop(audio: RawAudioBuffer, _: usize) -> RawAudioBuffer {
     audio
 }
 
-fn discard(
-    mut audio: RawAudioBuffer,
-    desired_no_samples: usize,
-) -> RawAudioBuffer {
+fn discard(mut audio: RawAudioBuffer, desired_no_samples: usize) -> RawAudioBuffer {
     let no_samples = audio.no_samples();
     if no_samples == desired_no_samples {
         return audio;
@@ -95,10 +92,7 @@ fn discard(
     audio
 }
 
-fn downsample(
-    mut audio: RawAudioBuffer,
-    mut desired_no_samples: usize,
-) -> RawAudioBuffer {
+fn downsample(mut audio: RawAudioBuffer, mut desired_no_samples: usize) -> RawAudioBuffer {
     let mut no_samples = audio.no_samples();
     if no_samples == desired_no_samples {
         return audio;
@@ -181,7 +175,9 @@ fn add_silence(mut audio: RawAudioBuffer, desired_no_samples: usize) -> RawAudio
     let no_bytes = audio.format().no_bytes();
     let silence_bytes = (desired_no_samples - no_samples) * no_bytes;
 
-    audio.as_vec_mut().extend(iter::repeat(0).take(silence_bytes));
+    audio
+        .as_vec_mut()
+        .extend(iter::repeat(0).take(silence_bytes));
 
     audio
 }

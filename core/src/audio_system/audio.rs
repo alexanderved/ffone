@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use mueue::*;
 
 use crate::util::ClockTime;
@@ -112,13 +110,17 @@ impl Message for RawAudioBuffer {}
 pub struct TimestampedRawAudioBuffer {
     raw: RawAudioBuffer,
 
-    start: ClockTime,
-    stop: ClockTime,
+    start: Option<ClockTime>,
+    duration: ClockTime,
 }
 
 impl TimestampedRawAudioBuffer {
-    pub fn new(raw: RawAudioBuffer, start: ClockTime, stop: ClockTime) -> Self {
-        Self { raw, start, stop }
+    pub fn new(raw: RawAudioBuffer, start: Option<ClockTime>, duration: ClockTime) -> Self {
+        Self {
+            raw,
+            start,
+            duration,
+        }
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -133,21 +135,21 @@ impl TimestampedRawAudioBuffer {
         self.raw.no_samples()
     }
 
-    pub fn start(&self) -> ClockTime {
+    pub fn start(&self) -> Option<ClockTime> {
         self.start
     }
 
-    pub fn stop(&self) -> ClockTime {
-        self.stop
+    pub fn stop(&self) -> Option<ClockTime> {
+        self.start.map(|start| start + self.duration)
     }
 
-    pub fn duration(&self) -> Duration {
-        self.stop().as_dur() - self.stop().as_dur()
+    pub fn duration(&self) -> ClockTime {
+        self.duration
     }
 
-    pub fn sample_duration(&self) -> Duration {
+    pub fn sample_duration(&self) -> ClockTime {
         let duration = self.duration();
-        let no_samples = self.raw.no_samples() as u32;
+        let no_samples = self.raw.no_samples() as u64;
 
         duration / no_samples
     }

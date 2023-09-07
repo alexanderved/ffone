@@ -6,10 +6,7 @@ fn test_discard() {
     let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
     let discraded_audio = vec![4, 5, 6, 1, 2, 3];
 
-    assert_eq!(
-        discard(audio, 2).as_slice(),
-        discraded_audio
-    );
+    assert_eq!(discard(audio, 2).as_slice(), discraded_audio);
 }
 
 #[test]
