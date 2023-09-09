@@ -18,9 +18,6 @@ pub struct GstDecoder {
 
 impl GstDecoder {
     fn drain(&self) {
-        let Some(output) = self.output.as_ref() else {
-            return;
-        };
         let Some(context) = self.context.as_ref() else {
             return;
         };
@@ -32,9 +29,13 @@ impl GstDecoder {
             }
 
             if let Some(audio) = context.pull() {
-                let _ = output.send(audio);
+                if let Some(output) = self.output.as_ref() {
+                    let _ = output.send(audio);
+                }
             }
         }
+
+        self.send_eos();
     }
 }
 
@@ -84,6 +85,10 @@ impl Element for GstDecoder {
 }
 
 impl AudioSource<TimestampedRawAudioBuffer> for GstDecoder {
+    fn output(&self) -> Option<MessageSender<TimestampedRawAudioBuffer>> {
+        self.output.clone()
+    }
+
     fn set_output(&mut self, output: MessageSender<TimestampedRawAudioBuffer>) {
         self.output = Some(output);
     }
