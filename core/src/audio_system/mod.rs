@@ -78,27 +78,31 @@ impl AudioSystem {
     }
 
     pub fn choose_audio_decoder(&mut self, info: AudioDecoderInfo) {
+        if let Some(old_dec) = self.pipeline.runnable_mut().take_audio_decoder() {
+            self.audio_decs.insert(old_dec.info(), Some(old_dec));
+        }
+
         let dec = self.audio_decs.get_mut(&info).and_then(Option::take);
         if let Some(dec) = dec {
-            if let Some(old_dec) = self.pipeline.runnable_mut().take_audio_decoder() {
-                self.audio_decs.insert(old_dec.info(), Some(old_dec));
-            }
-
             // The new audio decoder needs to receive useful information such as
             // an audio format header which is sent at the beginning of the audio stream,
             // so we have to ask for restarting it.
-            self.send(AudioSystemMessage::RestartAudioStream);
+            self.restart_audio_stream();
             self.pipeline.runnable_mut().set_audio_decoder(dec);
         }
     }
 
+    fn restart_audio_stream(&mut self) {
+        self.send(AudioSystemMessage::RestartAudioStream);
+    }
+
     pub fn choose_virtual_microphone(&mut self, info: VirtualMicrophoneInfo) {
+        if let Some(old_mic) = self.pipeline.runnable_mut().take_virtual_microphone() {
+            self.virtual_mics.insert(old_mic.info(), Some(old_mic));
+        }
+
         let mic = self.virtual_mics.get_mut(&info).and_then(Option::take);
         if let Some(mic) = mic {
-            if let Some(old_mic) = self.pipeline.runnable_mut().take_virtual_microphone() {
-                self.virtual_mics.insert(old_mic.info(), Some(old_mic));
-            }
-
             self.pipeline.runnable_mut().set_virtual_microphone(mic);
         }
     }

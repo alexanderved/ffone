@@ -14,6 +14,7 @@ enum RawAudioFormat {
     RawAudioFormat_S32BE,
     RawAudioFormat_F32LE,
     RawAudioFormat_F32BE,
+    RawAudioFormat_Unspecified,
 };
 typedef int8_t RawAudioFormat;
 

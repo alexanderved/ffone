@@ -16,18 +16,20 @@ use crate::util::{ControlFlow, Runnable, RunnableStateMachine};
 macro_rules! add_pipeline_element {
     (
         @element $elem:ty;
+
         @long_name $func:ident;
         @name $name:ident;
+
+        $( @prev $prev:ident; )?
+        $( @next $next:ident; )?
+
         $(
-            @prev $prev:ident;
-            $( @prev_on_set $prev_on_set:block; )?
-            $( @prev_on_take $prev_on_take:block; )?
-        )?
+            @modify_on_set ($elem_on_set:ident: $elem_on_set_ty:ty) => $on_set_mod:block;
+        )*
+
         $(
-            @next $next:ident;
-            $( @next_on_set $next_on_set:block; )?
-            $( @next_on_take $next_on_take:block; )?
-        )?
+            @modify_on_take ($elem_on_take:ident: $elem_on_take_ty:ty) => $on_take_mod:block;
+        )*
     ) => {
         paste::paste! {
             pub(super) fn [< set_ $func >](&mut self, mut elem: $elem) {
@@ -38,16 +40,23 @@ macro_rules! add_pipeline_element {
                 $(
                     if let Some($prev) = self.$prev.as_mut() {
                         $prev.as_audio_source_mut().chain(elem.as_audio_sink_mut());
-                        $( $prev_on_set; )?
                     }
                 )?
 
                 $(
                     if let Some($next) = self.$next.as_mut() {
                         elem.as_audio_source_mut().chain($next.as_audio_sink_mut());
-                        $( $next_on_set; )?
                     }
                 )?
+
+                $(
+                    if let Some($elem_on_set) = self.$elem_on_set.as_mut() {
+                        #[allow(unused)]
+                        (|$name: &mut $elem, $elem_on_set: $elem_on_set_ty| {
+                            $on_set_mod
+                        })(&mut elem, $elem_on_set);
+                    }
+                )*
 
                 self.$name = Some(elem);
             }
@@ -56,14 +65,12 @@ macro_rules! add_pipeline_element {
                 $(
                     if let Some($prev) = self.$prev.as_mut() {
                         $prev.as_audio_source_mut().unset_output();
-                        $( $prev_on_take; )?
                     }
                 )?
 
                 $(
                     if let Some($next) = self.$next.as_mut() {
                         $next.as_audio_sink_mut().unset_input();
-                        $( $next_on_take; )?
                     }
                 )?
 
@@ -71,6 +78,16 @@ macro_rules! add_pipeline_element {
                     if self.is_running {
                         elem.on_stop();
                     }
+
+                    $(
+                        if let Some($elem_on_take) = self.$elem_on_take.as_mut() {
+                            #[allow(unused)]
+                            (|$name: &mut $elem, $elem_on_take: $elem_on_take_ty| {
+                                $on_take_mod
+                            })(&mut elem, $elem_on_take);
+                        }
+                    )*
+
                     elem
                 })
             }
@@ -117,32 +134,49 @@ impl AudioPipeline {
 
     add_pipeline_element! {
         @element Box<dyn AudioDecoder>;
+
         @long_name audio_decoder;
         @name dec;
+
         @next sync;
     }
 
     add_pipeline_element! {
         @element Synchronizer;
+
         @long_name synchronizer;
         @name sync;
+        
         @prev dec;
         @next resizer;
     }
 
     add_pipeline_element! {
         @element AudioResizer;
+
         @long_name resizer;
         @name resizer;
+
         @prev sync;
         @next mic;
     }
 
     add_pipeline_element! {
         @element Box<dyn VirtualMicrophone>;
+
         @long_name virtual_microphone;
         @name mic;
+
         @prev resizer;
+
+        @modify_on_set (sync: &mut Synchronizer) => {
+            if let Some(clock) = mic.provide_clock() {
+                sync.set_virtual_microphone_clock(clock);
+            }
+        };
+        @modify_on_take (sync: &mut Synchronizer) => {
+            sync.unset_virtual_microphone_clock();
+        };
     }
 }
 

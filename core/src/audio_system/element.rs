@@ -24,6 +24,7 @@ where
 impl<B: ElementBuilder> AudioSystemElementBuilder for B where Self::Element: AudioSystemElement {}
 
 pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
+    fn output(&self) -> Option<MessageSender<Out>>;
     fn set_output(&mut self, output: MessageSender<Out>);
     fn unset_output(&mut self);
 
@@ -38,6 +39,7 @@ pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
 impl_as_trait!(audio_source -> AudioSource<Out: Message>);
 
 pub trait AudioSink<In: Message>: AudioSystemElement + AsAudioSink<In> {
+    fn input(&self) -> Option<MessageReceiver<In>>;
     fn set_input(&mut self, input: MessageReceiver<In>);
     fn unset_input(&mut self);
 }

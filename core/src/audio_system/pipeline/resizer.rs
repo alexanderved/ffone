@@ -37,40 +37,44 @@ impl Runnable for AudioResizer {
         let Some(input) = self.input.as_ref() else {
             return Ok(());
         };
-        let Some(output) = self.output.as_ref() else {
-            return Ok(());
-        };
 
         for audio in input.iter() {
             let no_samples = audio.no_samples();
             let desired_no_samples = audio.desired_no_samples();
             let raw_audio = audio.into_raw();
 
-            let f = if no_samples == 0 || desired_no_samples == 0 {
-                continue;
-            } else if desired_no_samples == no_samples {
-                noop
-            } else if desired_no_samples <= no_samples * 3 / 4 {
-                discard
-            } else if desired_no_samples <= no_samples {
-                downsample
-            } else if desired_no_samples >= no_samples * 4 / 3 {
-                add_silence
-            } else if desired_no_samples >= no_samples {
-                upsample
-            } else {
+            let Some(f) = choose_resize_function(no_samples, desired_no_samples) else {
                 continue;
             };
 
-            let _ = output.send(f(raw_audio, desired_no_samples));
+            if let Some(output) = self.output.as_ref() {
+                let _ = output.send(f(raw_audio, desired_no_samples));
+            }
         }
 
         Ok(())
     }
 }
 
-fn noop(audio: RawAudioBuffer, _: usize) -> RawAudioBuffer {
-    audio
+fn choose_resize_function(
+    no_samples: usize,
+    desired_no_samples: usize,
+) -> Option<fn(RawAudioBuffer, usize) -> RawAudioBuffer> {
+    if no_samples == 0 || desired_no_samples == 0 {
+        None
+    } else if desired_no_samples == no_samples {
+        Some(|audio, _| audio)
+    } else if desired_no_samples <= no_samples * 3 / 4 {
+        Some(discard)
+    } else if desired_no_samples <= no_samples {
+        Some(downsample)
+    } else if desired_no_samples >= no_samples * 4 / 3 {
+        Some(add_silence)
+    } else if desired_no_samples >= no_samples {
+        Some(upsample)
+    } else {
+        None
+    }
 }
 
 fn discard(mut audio: RawAudioBuffer, desired_no_samples: usize) -> RawAudioBuffer {
@@ -247,6 +251,10 @@ impl Element for AudioResizer {
 }
 
 impl AudioSink<ResizableRawAudioBuffer> for AudioResizer {
+    fn input(&self) -> Option<MessageReceiver<ResizableRawAudioBuffer>> {
+        self.input.clone()    
+    }
+    
     fn set_input(&mut self, input: MessageReceiver<ResizableRawAudioBuffer>) {
         self.input = Some(input);
     }
@@ -257,6 +265,10 @@ impl AudioSink<ResizableRawAudioBuffer> for AudioResizer {
 }
 
 impl AudioSource<RawAudioBuffer> for AudioResizer {
+    fn output(&self) -> Option<MessageSender<RawAudioBuffer>> {
+        self.output.clone()
+    }
+    
     fn set_output(&mut self, output: MessageSender<RawAudioBuffer>) {
         self.output = Some(output);
     }
@@ -283,6 +295,8 @@ enum Sample {
 
     F32LE(f32),
     F32BE(f32),
+
+    Unspecified,
 }
 
 impl Sample {
@@ -294,6 +308,7 @@ impl Sample {
             S::S16LE(_) | S::S16BE(_) => 2,
             S::S24LE(_) | S::S24BE(_) => 3,
             S::S32LE(_) | S::S32BE(_) | S::F32LE(_) | S::F32BE(_) => 4,
+            S::Unspecified => 0,
         }
     }
 
@@ -349,6 +364,7 @@ impl Sample {
                     .expect("The byte slice is too long");
                 S::F32BE(f32::from_be_bytes(bytes))
             }
+            R::Unspecified => S::Unspecified,
         }
     }
 
@@ -366,6 +382,7 @@ impl Sample {
             S::S32BE(a) => bytes[0..4].clone_from_slice(&a.to_be_bytes()),
             S::F32LE(a) => bytes[0..4].clone_from_slice(&a.to_le_bytes()),
             S::F32BE(a) => bytes[0..4].clone_from_slice(&a.to_be_bytes()),
+            S::Unspecified => {}
         }
 
         bytes
@@ -414,6 +431,7 @@ impl ops::Mul<usize> for Sample {
             S::S32BE(a) => S::S32BE(a * rhs as i32),
             S::F32LE(a) => S::F32LE(a * rhs as f32),
             S::F32BE(a) => S::F32BE(a * rhs as f32),
+            S::Unspecified => S::Unspecified,
         }
     }
 }
@@ -434,6 +452,7 @@ impl ops::Div<usize> for Sample {
             S::S32BE(a) => S::S32BE(a / rhs as i32),
             S::F32LE(a) => S::F32LE(a / rhs as f32),
             S::F32BE(a) => S::F32BE(a / rhs as f32),
+            S::Unspecified => S::Unspecified,
         }
     }
 }

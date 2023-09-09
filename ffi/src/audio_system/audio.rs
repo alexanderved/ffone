@@ -13,7 +13,8 @@ pub unsafe extern "C" fn ffone_raw_audio_buffer_drop(buffer: *mut libc::c_void) 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ffone_raw_audio_buffer_as_ptr(buffer: *const RawAudioBuffer) -> *const u8 {
+pub unsafe extern "C" fn ffone_raw_audio_buffer_as_ptr(buffer: *const RawAudioBuffer) -> *const u8
+{
     if buffer.is_null() {
         return ptr::null();
     }
@@ -22,7 +23,8 @@ pub unsafe extern "C" fn ffone_raw_audio_buffer_as_ptr(buffer: *const RawAudioBu
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ffone_raw_audio_buffer_as_ptr_mut(buffer: *mut RawAudioBuffer) -> *mut u8 {
+pub unsafe extern "C" fn ffone_raw_audio_buffer_as_ptr_mut(buffer: *mut RawAudioBuffer) -> *mut u8
+{
     if buffer.is_null() {
         return ptr::null_mut();
     }
@@ -44,7 +46,8 @@ pub unsafe extern "C" fn ffone_raw_audio_buffer_format(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ffone_raw_audio_buffer_len(buffer: *const RawAudioBuffer) -> libc::size_t {
+pub unsafe extern "C" fn ffone_raw_audio_buffer_len(buffer: *const RawAudioBuffer) -> libc::size_t
+{
     if buffer.is_null() {
         return 0;
     }

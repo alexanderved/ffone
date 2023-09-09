@@ -60,14 +60,21 @@ impl Synchronizer {
     ) {
         self.virtual_mic_clock = Some(virtual_mic_clock);
     }
+
+    pub(in crate::audio_system) fn unset_virtual_microphone_clock(&mut self) {
+        self.virtual_mic_clock = None;
+    }
+
+    fn on_eos(&mut self) {
+        self.first_buf_arrival_ts = None;
+        self.first_buf_start_ts = None;
+        self.next_buffer_expected_ts = ClockTime::ZERO;
+    }
 }
 
 impl Runnable for Synchronizer {
     fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
         let Some(input) = self.input.as_ref() else {
-            return Ok(());
-        };
-        let Some(output) = self.output.as_ref() else {
             return Ok(());
         };
 
@@ -79,13 +86,19 @@ impl Runnable for Synchronizer {
 
         self.queue.extend(input.iter());
         while let Some(ts_buf) = self.queue.pop_front() {
+            if ts_buf == TimestampedRawAudioBuffer::NULL {
+                self.on_eos();
+
+                continue;
+            }
+
             let elapsed = self.sys_clock.get_time();
 
             let buf_start_ts = ts_buf.start().unwrap_or(self.next_buffer_expected_ts);
             let buf_duration = ts_buf.duration();
 
             let first_buf_arrival_ts = *self.first_buf_arrival_ts.get_or_insert(elapsed);
-            let first_buf_start_ts = self.first_buf_start_ts.unwrap_or(ClockTime::ZERO);
+            let first_buf_start_ts = *self.first_buf_start_ts.get_or_insert(buf_start_ts);
 
             let desired_play_date = buf_start_ts - first_buf_start_ts + first_buf_arrival_ts;
 
@@ -117,10 +130,8 @@ impl Runnable for Synchronizer {
                 let desired_no_samples = (duration / sample_duration).as_nanos() as usize;
                 let buf = ResizableRawAudioBuffer::new(ts_buf.into_raw(), desired_no_samples);
 
-                let _ = output.send(buf);
-
-                if self.first_buf_start_ts.is_none() {
-                    self.first_buf_start_ts = Some(buf_start_ts);
+                if let Some(output) = self.output.as_ref() {
+                    let _ = output.send(buf);
                 }
             } else {
                 self.queue.push_front(ts_buf);
@@ -146,6 +157,10 @@ impl Element for Synchronizer {
 }
 
 impl AudioSink<TimestampedRawAudioBuffer> for Synchronizer {
+    fn input(&self) -> Option<MessageReceiver<TimestampedRawAudioBuffer>> {
+        self.input.clone()
+    }
+
     fn set_input(&mut self, input: MessageReceiver<TimestampedRawAudioBuffer>) {
         self.input = Some(input);
     }
@@ -156,6 +171,10 @@ impl AudioSink<TimestampedRawAudioBuffer> for Synchronizer {
 }
 
 impl AudioSource<ResizableRawAudioBuffer> for Synchronizer {
+    fn output(&self) -> Option<MessageSender<ResizableRawAudioBuffer>> {
+        self.output.clone()
+    }
+    
     fn set_output(&mut self, output: MessageSender<ResizableRawAudioBuffer>) {
         self.output = Some(output);
     }

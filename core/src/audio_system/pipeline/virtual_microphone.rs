@@ -1,6 +1,9 @@
 use crate::audio_system::audio::*;
 use crate::audio_system::element::*;
 use crate::util::RunnableStateMachine;
+use crate::util::SlaveClock;
+
+use std::rc::Rc;
 
 pub type VirtualMicrophoneStateMachine = RunnableStateMachine<Box<dyn VirtualMicrophone>>;
 
@@ -12,6 +15,10 @@ pub struct VirtualMicrophoneInfo {
 pub trait VirtualMicrophone: AudioSink<RawAudioBuffer> {
     fn info(&self) -> VirtualMicrophoneInfo;
     fn set_sample_rate(&mut self, rate: u32);
+
+    fn provide_clock(&self) -> Option<Rc<dyn SlaveClock>> {
+        None
+    }
 }
 
 crate::trait_alias!(pub VirtualMicrophoneBuilder:
