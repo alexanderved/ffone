@@ -35,7 +35,6 @@ pub struct EncodedAudioInfo {
 #[repr(i8)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum RawAudioFormat {
-    #[default]
     U8,
 
     S16LE,
@@ -49,6 +48,9 @@ pub enum RawAudioFormat {
 
     F32LE,
     F32BE,
+
+    #[default]
+    Unspecified,
 }
 
 impl RawAudioFormat {
@@ -60,6 +62,7 @@ impl RawAudioFormat {
             S16LE | S16BE => 2,
             S24LE | S24BE => 3,
             S32LE | S32BE | F32LE | F32BE => 4,
+            Unspecified => 0,
         }
     }
 }
@@ -71,7 +74,7 @@ pub struct RawAudioBuffer {
 }
 
 impl RawAudioBuffer {
-    pub fn new(data: Vec<u8>, format: RawAudioFormat) -> Self {
+    pub const fn new(data: Vec<u8>, format: RawAudioFormat) -> Self {
         Self { data, format }
     }
 
@@ -115,11 +118,21 @@ pub struct TimestampedRawAudioBuffer {
 }
 
 impl TimestampedRawAudioBuffer {
-    pub fn new(raw: RawAudioBuffer, start: Option<ClockTime>, duration: ClockTime) -> Self {
+    pub const NULL: Self = Self::null();
+
+    pub const fn new(raw: RawAudioBuffer, start: Option<ClockTime>, duration: ClockTime) -> Self {
         Self {
             raw,
             start,
             duration,
+        }
+    }
+
+    pub const fn null() -> Self {
+        Self {
+            raw: RawAudioBuffer::new(Vec::new(), RawAudioFormat::Unspecified),
+            start: None,
+            duration: ClockTime::ZERO,
         }
     }
 

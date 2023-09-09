@@ -16,6 +16,8 @@ use gstreamer_app as gst_app;
 
 #[allow(dead_code)]
 pub(super) struct GstContext {
+    audio_info: EncodedAudioInfo,
+
     pipeline: gst::Pipeline,
 
     src: gst_app::AppSrc,
@@ -26,11 +28,11 @@ pub(super) struct GstContext {
 }
 
 impl GstContext {
-    pub(super) fn new(info: EncodedAudioInfo) -> Self {
+    pub(super) fn new(audio_info: EncodedAudioInfo) -> Self {
         let pipeline = gst::Pipeline::new(Some("gst_audio_decoder_pipeline"));
 
-        let caps = gst::Caps::builder(mime_from_format(info.format))
-            .field("rate", info.sample_rate)
+        let caps = gst::Caps::builder(mime_from_format(audio_info.format))
+            .field("rate", audio_info.sample_rate)
             .field("channels", 1)
             .build();
         let src = gst_app::AppSrc::builder()
@@ -39,11 +41,11 @@ impl GstContext {
             .stream_type(gst_app::AppStreamType::Stream)
             .build();
 
-        let demuxer = gst::ElementFactory::make(demuxer_name_from_format(info.format))
+        let demuxer = gst::ElementFactory::make(demuxer_name_from_format(audio_info.format))
             .name("demuxer")
             .build()
             .unwrap();
-        let parser = gst::ElementFactory::make(parser_name_from_codec(info.codec))
+        let parser = gst::ElementFactory::make(parser_name_from_codec(audio_info.codec))
             .name("parser")
             .build()
             .unwrap();
@@ -56,7 +58,7 @@ impl GstContext {
                 for structure in caps.iter() {
                     let pad_type = structure.name();
 
-                    if pad_type.starts_with(mime_from_codec(info.codec)) {
+                    if pad_type.starts_with(mime_from_codec(audio_info.codec)) {
                         pad.link(&sink_pad).unwrap();
                         return;
                     }
@@ -64,7 +66,7 @@ impl GstContext {
             }
         });
 
-        let decoder = gst::ElementFactory::make(decoder_name_from_codec(info.codec))
+        let decoder = gst::ElementFactory::make(decoder_name_from_codec(audio_info.codec))
             .name("decoder")
             .build()
             .unwrap();
@@ -84,6 +86,8 @@ impl GstContext {
         gst::Element::link_many(&[&parser, &decoder, sink.upcast_ref()]).unwrap();
 
         let this = Self {
+            audio_info,
+
             pipeline,
 
             src,
@@ -109,9 +113,9 @@ impl GstContext {
             .try_pull_sample(Some(gst::ClockTime::from_mseconds(1)))?;
 
         let raw = raw_audio_buffer_from_sample(&sample)?;
-        let (start, stop) = timestamps_from_sample(&sample)?;
+        let (start, dur) = timestamps_from_sample(&sample, &raw, self.audio_info);
 
-        Some(TimestampedRawAudioBuffer::new(raw, start, stop))
+        Some(TimestampedRawAudioBuffer::new(raw, start, dur))
     }
 
     pub(super) fn push_eos(&self) {
@@ -210,21 +214,56 @@ fn raw_audio_buffer_from_sample(sample: &gst::Sample) -> Option<RawAudioBuffer> 
     Some(RawAudioBuffer::new(data, format))
 }
 
-fn timestamps_from_sample(sample: &gst::Sample) -> Option<(ClockTime, ClockTime)> {
-    let buffer = sample.buffer()?;
-    let buf_start = buffer.dts_or_pts()?;
-    let buf_stop = buf_start + buffer.duration()?;
+fn timestamps_from_sample(
+    sample: &gst::Sample,
+    raw_audio_buffer: &RawAudioBuffer,
+    audio_info: EncodedAudioInfo,
+) -> (Option<ClockTime>, ClockTime) {
+    let raw_audio_duration = ClockTime::from_nanos(
+        raw_audio_buffer.no_samples() as u64 * ClockTime::NANOS_IN_SEC
+            / audio_info.sample_rate as u64,
+    );
 
-    let segment = sample.segment()?;
-    let gst::GenericFormattedValue::Time(Some(start)) = segment.to_running_time(buf_start) else {
-        return None;
+    let Some(buffer) = sample.buffer() else {
+        return (None, raw_audio_duration);
     };
-    let gst::GenericFormattedValue::Time(Some(stop)) = segment.to_running_time(buf_stop) else {
-        return None;
+
+    let buf_dur = buffer
+        .duration()
+        .unwrap_or(gst::ClockTime::from_nseconds(raw_audio_duration.as_nanos()));
+
+    let Some(mut buf_start) = buffer.dts_or_pts() else {
+        return (None, to_custom_clock_time(buf_dur));
+    };
+    let mut buf_stop = buf_start + buf_dur;
+
+    let Some(segment) = sample.segment() else {
+        return (Some(to_custom_clock_time(buf_start)), to_custom_clock_time(buf_dur));
     };
 
-    let start_ts = ClockTime::from_nanos(start.nseconds());
-    let stop_ts = ClockTime::from_nanos(stop.nseconds());
+    buf_start = to_running_time(segment, buf_start);
+    buf_stop = to_running_time(segment, buf_stop);
 
-    Some((start_ts, stop_ts))
+    let start_ts = to_custom_clock_time(buf_start);
+    let stop_ts = to_custom_clock_time(buf_stop);
+
+    (Some(start_ts), stop_ts - start_ts)
+}
+
+fn to_custom_clock_time(ts: gst::ClockTime) -> ClockTime {
+    ClockTime::from_nanos(ts.nseconds())
+}
+
+fn to_running_time(segment: &gst::Segment, ts: gst::ClockTime) -> gst::ClockTime {
+    let gst::GenericFormattedValue::Time(Some(start)) = segment.start() else {
+        return ts;
+    };
+    let gst::GenericFormattedValue::Time(Some(offset)) = segment.offset() else {
+        return ts - start;
+    };
+    let gst::GenericFormattedValue::Time(Some(base)) = segment.base() else {
+        return ts - start - offset;
+    };
+
+    ts - start - offset + base
 }
