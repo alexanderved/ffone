@@ -2,7 +2,6 @@
 #include "pa_ctx.h"
 
 #include "util.h"
-#include "rc.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -10,11 +9,11 @@
 static void stream_dtor(void *opaque);
 
 static pa_stream *new_pa_stream(
-    PAContext *pa_ctx,
+    ffone_rc_ptr(PAContext) pa_ctx,
     uint32_t sample_rate,
     RawAudioFormat format
 );
-static int connect_pa_stream(pa_stream *stream, PAContext *pa_ctx);
+static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx);
 
 static pa_sample_format_t raw_audio_format_to_pa_sample_format_t(RawAudioFormat raw);
 
@@ -26,8 +25,8 @@ static void stream_drain(Stream *stream);
 static void stream_success_cb(pa_stream *p, int success, void *userdata);
 
 struct Stream {
-    PAContext *pa_ctx;
-    VirtualSink *sink;
+    ffone_weak(PAContext) pa_ctx;
+    ffone_rc(VirtualSink) sink;
 
     pa_stream *stream;
     StreamFlags flags;
@@ -44,13 +43,12 @@ pa_stream *stream_get_pa_stream(Stream *s) {
 
 
 Stream *stream_new(
-    PAContext *pa_ctx,
-    VirtualSink *sink,
+    ffone_rc_ptr(PAContext) pa_ctx,
+    ffone_rc_ptr(VirtualSink) sink,
     uint32_t sample_rate,
     RawAudioFormat format
 ) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && sink, NULL);
-    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), NULL);
 
     Stream *stream = ffone_rc_new0(Stream);
     FFONE_RETURN_VAL_ON_FAILURE(stream, NULL);
@@ -117,7 +115,7 @@ static void stream_dtor(void *opaque) {
 }
 
 static pa_stream *new_pa_stream(
-    PAContext *pa_ctx,
+    ffone_rc_ptr(PAContext) pa_ctx,
     uint32_t sample_rate,
     RawAudioFormat format
 ) {
@@ -143,7 +141,7 @@ static pa_stream *new_pa_stream(
     return stream;
 }
 
-static int connect_pa_stream(pa_stream *stream, PAContext *pa_ctx) {
+static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(stream, -1);
 
     const pa_buffer_attr buf_attr = {
@@ -175,6 +173,7 @@ static int connect_pa_stream(pa_stream *stream, PAContext *pa_ctx) {
 
 static void stream_update_pa_stream(Stream *stream) {
     FFONE_RETURN_ON_FAILURE(stream);
+    FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream));
 
     if (stream->stream) {
         stream_drain(stream);
@@ -224,7 +223,7 @@ static pa_sample_format_t raw_audio_format_to_pa_sample_format_t(RawAudioFormat 
 
 void stream_set_sample_rate(Stream *stream, uint32_t sample_rate) {
     FFONE_RETURN_ON_FAILURE(stream);
-    FFONE_RETURN_ON_FAILURE(stream->stream);
+    FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
     stream_drain(stream);
 
@@ -255,7 +254,7 @@ void stream_update(Stream *stream) {
 
 static void stream_try_write(Stream *stream) {
     FFONE_RETURN_ON_FAILURE(stream);
-    FFONE_RETURN_ON_FAILURE(stream->stream);
+    FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
     RawAudioQueue *queue = pa_ctx_get_queue(stream->pa_ctx);
     FFONE_RETURN_ON_FAILURE(queue);
@@ -288,7 +287,7 @@ static void stream_try_write(Stream *stream) {
 
         if (read_size == 0) {
             if (!have_same_format) {
-                printf("\tOUTDATED AUDIO FORMAT DETECTED: %d\n", stream->format);
+                // printf("\tOUTDATED AUDIO FORMAT DETECTED: %d\n", stream->format);
 
                 stream->flags |= FFONE_STREAM_FLAG_OUTDATED_AUDIO_FORMAT;
 
@@ -325,7 +324,7 @@ static void stream_try_write(Stream *stream) {
 
 static void stream_drain(Stream *stream) {
     FFONE_RETURN_ON_FAILURE(stream);
-    FFONE_RETURN_ON_FAILURE(stream->stream);
+    FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
     int success = -1;
     pa_operation *o = pa_stream_drain(stream->stream, stream_success_cb, &success);
@@ -343,4 +342,14 @@ static void stream_success_cb(pa_stream *p, int success, void *userdata) {
     *success_ret = success;
 
     (void)p;
+}
+
+uint64_t stream_get_time(Stream *stream) {
+    FFONE_RETURN_VAL_ON_FAILURE(stream, 0);
+    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream, 0);
+
+    pa_usec_t usec;
+    pa_stream_get_time(stream->stream, &usec);
+
+    return usec;
 }

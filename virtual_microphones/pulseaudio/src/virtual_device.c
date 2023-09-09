@@ -5,10 +5,9 @@
 #include <string.h>
 
 #include "util.h"
-#include "rc.h"
 
 struct VirtualDevice {
-    PAContext *pa_ctx;
+    ffone_weak(PAContext) pa_ctx;
     VirtualDeviceFlags flags;
 
     uint32_t idx;
@@ -18,7 +17,7 @@ struct VirtualDevice {
 
 static int virtual_device_new(
     VirtualDevice *device,
-    PAContext *pa_ctx,
+    ffone_rc_ptr(PAContext) pa_ctx,
     const char *name,
     const char *descr
 ) {
@@ -93,17 +92,20 @@ static void virtual_device_unloaded(pa_context *c, int success, void *userdata) 
 
 struct VirtualSource {
     VirtualDevice base;
-    VirtualSink *master;
+    ffone_rc(VirtualSink) master;
 };
 
 static void virtual_source_dtor(void *opaque);
-static int virtual_source_load(VirtualSource *src);
-static int virtual_source_unload(VirtualSource *src);
+static int virtual_source_load(ffone_rc_ptr(VirtualSource) src);
+static int virtual_source_unload(ffone_rc_ptr(VirtualSource) src);
 
-VirtualSource *virtual_source_new(PAContext *pa_ctx, VirtualSink *master) {
+ffone_rc(VirtualSource) virtual_source_new(
+    ffone_rc_ptr(PAContext) pa_ctx,
+    ffone_rc_ptr(VirtualSink) master)
+{
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && master, NULL);
 
-    VirtualSource *src = ffone_rc_new0(VirtualSource);
+    ffone_rc(VirtualSource) src = ffone_rc_new0(VirtualSource);
     FFONE_RETURN_VAL_ON_FAILURE(src, NULL);
 
     FFONE_GOTO_ON_FAILURE(src->master = ffone_rc_ref(master), error_master_rc_ref);
@@ -141,7 +143,7 @@ static void virtual_source_dtor(void *opaque) {
     puts("VirtualSource dtor");
 }
 
-static int virtual_source_load(VirtualSource *src) {
+static int virtual_source_load(ffone_rc_ptr(VirtualSource) src) {
     FFONE_RETURN_VAL_ON_FAILURE(src, -1);
 
     FFONE_RETURN_VAL_ON_FAILURE(src->master, -1);
@@ -174,7 +176,7 @@ static int virtual_source_load(VirtualSource *src) {
     return ret;
 }
 
-static int virtual_source_unload(VirtualSource *src) {
+static int virtual_source_unload(ffone_rc_ptr(VirtualSource) src) {
     FFONE_RETURN_VAL_ON_FAILURE(src, -1);
     
     FFONE_RETURN_VAL_ON_FAILURE((src->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
@@ -195,13 +197,13 @@ struct VirtualSink {
 };
 
 static void virtual_sink_dtor(void *opaque);
-static int virtual_sink_load(VirtualSink *sink);
-static int virtual_sink_unload(VirtualSink *sink);
+static int virtual_sink_load(ffone_rc_ptr(VirtualSink) sink);
+static int virtual_sink_unload(ffone_rc_ptr(VirtualSink) sink);
 
-VirtualSink *virtual_sink_new(PAContext *pa_ctx) {
+ffone_rc(VirtualSink) virtual_sink_new(ffone_rc_ptr(PAContext) pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, NULL);
 
-    VirtualSink *sink = ffone_rc_new0(VirtualSink);
+    ffone_rc(VirtualSink) sink = ffone_rc_new0(VirtualSink);
     FFONE_RETURN_VAL_ON_FAILURE(sink, NULL);
 
     FFONE_GOTO_ON_FAILURE(virtual_device_new(
@@ -234,7 +236,7 @@ static void virtual_sink_dtor(void *opaque) {
     puts("VirtualSink dtor");
 }
 
-int virtual_sink_load(VirtualSink *sink) {
+int virtual_sink_load(ffone_rc_ptr(VirtualSink) sink) {
     FFONE_RETURN_VAL_ON_FAILURE(sink, -1);
 
     FFONE_RETURN_VAL_ON_FAILURE((sink->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
@@ -264,7 +266,7 @@ int virtual_sink_load(VirtualSink *sink) {
     return ret;
 }
 
-int virtual_sink_unload(VirtualSink *sink) {
+int virtual_sink_unload(ffone_rc_ptr(VirtualSink) sink) {
     FFONE_RETURN_VAL_ON_FAILURE(sink, -1);
 
     FFONE_RETURN_VAL_ON_FAILURE((sink->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
@@ -280,7 +282,7 @@ int virtual_sink_unload(VirtualSink *sink) {
     return ret;
 }
 
-const char *virtual_sink_get_name(VirtualSink *sink) {
+const char *virtual_sink_get_name(ffone_rc_ptr(VirtualSink) sink) {
     FFONE_RETURN_VAL_ON_FAILURE(sink, NULL);
 
     return sink->base.name;

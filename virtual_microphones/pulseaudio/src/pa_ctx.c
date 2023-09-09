@@ -27,10 +27,10 @@ struct PAContext {
 
 static void pa_ctx_dtor(void *opaque);
 
-PAContext *pa_ctx_new(RawAudioQueue *queue) {
+ffone_rc(PAContext) pa_ctx_new(ffone_rc_ptr(RawAudioQueue) queue) {
     srand((unsigned int)time(0) ^ (unsigned int)ffone_get_pid());
 
-    PAContext *pa_ctx = ffone_rc_new0(PAContext);
+    ffone_rc(PAContext) pa_ctx = ffone_rc_new0(PAContext);
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, NULL);
 
     pa_ctx->queue = ffone_rc_ref(queue);
@@ -127,28 +127,28 @@ static void pa_ctx_dtor(void *opaque) {
     puts("PAContext dtor");
 }
 
-pa_context *pa_ctx_get_context(PAContext *pa_ctx) {
+pa_context *pa_ctx_get_context(ffone_rc_ptr(PAContext) pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, NULL);
     FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), NULL);
 
     return pa_ctx->context;
 }
 
-pa_mainloop *pa_ctx_get_loop(PAContext *pa_ctx) {
+pa_mainloop *pa_ctx_get_loop(ffone_rc_ptr(PAContext)pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, NULL);
     FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), NULL);
 
     return pa_ctx->loop;
 }
 
-RawAudioQueue *pa_ctx_get_queue(PAContext *pa_ctx) {
+ffone_rc_ptr(RawAudioQueue) pa_ctx_get_queue(ffone_rc_ptr(PAContext)pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, NULL);
     FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), NULL);
 
     return pa_ctx->queue;
 }
 
-int pa_ctx_execute_operation(PAContext *pa_ctx, pa_operation *o) {
+int pa_ctx_execute_operation(ffone_rc_ptr(PAContext) pa_ctx, pa_operation *o) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && o, -1);
     FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), -1);
 
@@ -166,7 +166,7 @@ int pa_ctx_execute_operation(PAContext *pa_ctx, pa_operation *o) {
 }
 
 int pa_ctx_load_virtual_device(
-    PAContext *pa_ctx,
+    ffone_rc_ptr(PAContext) pa_ctx,
     const char *module,
     const char *args,
     pa_context_index_cb_t cb,
@@ -188,7 +188,7 @@ int pa_ctx_load_virtual_device(
 }
 
 int pa_ctx_unload_virtual_device(
-    PAContext *pa_ctx,
+    ffone_rc_ptr(PAContext) pa_ctx,
     uint32_t idx,
     pa_context_success_cb_t cb,
     void *userdata
@@ -208,14 +208,14 @@ int pa_ctx_unload_virtual_device(
     return pa_ctx_execute_operation(pa_ctx, o);
 }
 
-int pa_ctx_iterate(PAContext *pa_ctx, int block) {
+int pa_ctx_iterate(ffone_rc_ptr(PAContext) pa_ctx, int block) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, -1);
     FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx) && pa_ctx->loop, -1);
 
     return pa_mainloop_iterate(pa_ctx->loop, block, NULL);
 }
 
-int pa_ctx_update(PAContext *pa_ctx, int block) {
+int pa_ctx_update(ffone_rc_ptr(PAContext) pa_ctx, int block) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, -1);
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx->loop, -1);
 
@@ -232,7 +232,7 @@ int pa_ctx_update(PAContext *pa_ctx, int block) {
 #include <unistd.h>
 
 void cmain(RawAudioQueue *queue) {
-    PAContext *pa_ctx = pa_ctx_new(queue);
+    ffone_rc(PAContext) pa_ctx = pa_ctx_new(queue);
     FFONE_RETURN_ON_FAILURE(pa_ctx);
 
     /* uint8_t *data = calloc(16, sizeof(uint8_t));

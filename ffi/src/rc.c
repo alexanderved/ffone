@@ -23,27 +23,27 @@ static void rc_header_init(RcHeader *rc_header, ffone_rc_dtor_t dtor) {
     rc_header->is_dtor_running = false;
 }
 
-void *ffone_rc_alloc(size_t size, ffone_rc_dtor_t dtor) {
+ffone_rc(void) ffone_rc_alloc(size_t size, ffone_rc_dtor_t dtor) {
     RcHeader *rc_header = malloc(sizeof(RcHeader) + size);
     if (!rc_header) {
         return NULL;
     }
     rc_header_init(rc_header, dtor);
 
-    return (void *)(rc_header + 1);
+    return (ffone_rc(void))(rc_header + 1);
 }
 
-void *ffone_rc_alloc0(size_t size, ffone_rc_dtor_t dtor) {
+ffone_rc(void) ffone_rc_alloc0(size_t size, ffone_rc_dtor_t dtor) {
     RcHeader *rc_header = calloc(1, sizeof(RcHeader) + size);
     if (!rc_header) {
         return NULL;
     }
     rc_header_init(rc_header, dtor);
 
-    return (void *)(rc_header + 1);
+    return (ffone_rc(void))(rc_header + 1);
 }
 
-void ffone_rc_set_dtor(void *rc, ffone_rc_dtor_t dtor) {
+void ffone_rc_set_dtor(ffone_rc_ptr(void) rc, ffone_rc_dtor_t dtor) {
     if (!rc) {
         return;
     }
@@ -52,7 +52,7 @@ void ffone_rc_set_dtor(void *rc, ffone_rc_dtor_t dtor) {
     rc_header->dtor = dtor;
 }
 
-void *ffone_rc_ref(void *rc) {
+ffone_rc(void) ffone_rc_ref(ffone_rc_ptr(void) rc) {
     if (!rc) {
         return NULL;
     }
@@ -66,7 +66,7 @@ void *ffone_rc_ref(void *rc) {
     return rc;
 }
 
-void ffone_rc_unref(void *rc) {
+void ffone_rc_unref(ffone_rc(void) rc) {
     if (!rc) {
         return;
     }
@@ -89,7 +89,7 @@ void ffone_rc_unref(void *rc) {
     }
 }
 
-void *ffone_rc_ref_weak(void *rc) {
+ffone_weak(void) ffone_rc_ref_weak(ffone_rc_ptr(void) rc) {
     if (!rc) {
         return NULL;
     }
@@ -100,7 +100,7 @@ void *ffone_rc_ref_weak(void *rc) {
     return rc;
 }
 
-void ffone_rc_unref_weak(void *rc) {
+void ffone_rc_unref_weak(ffone_weak(void) rc) {
     if (!rc) {
         return;
     }
@@ -115,7 +115,7 @@ void ffone_rc_unref_weak(void *rc) {
     }
 }
 
-bool ffone_rc_is_destructed(void *rc) {
+bool ffone_rc_is_destructed(ffone_rc_ptr(void) rc) {
     if (!rc) {
         return true;
     }

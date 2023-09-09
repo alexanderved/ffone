@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "audio.h"
+#include "rc.h"
 
 #define FFONE_DEFAULT_SAMPLE_RATE 8000
 #define FFONE_DEFAULT_AUDIO_FORMAT RawAudioFormat_U8
@@ -20,14 +21,15 @@ typedef uint32_t StreamFlags;
 typedef struct Stream Stream;
 
 Stream *stream_new(
-    PAContext *pa_ctx,
-    VirtualSink *sink,
+    ffone_rc_ptr(PAContext) pa_ctx,
+    ffone_rc_ptr(VirtualSink) sink,
     uint32_t sample_rate,
     RawAudioFormat format
 );
 
 void stream_update(Stream *stream);
 
+uint64_t stream_get_time(Stream *stream);
 
 
 pa_stream *stream_get_pa_stream(Stream *s);
