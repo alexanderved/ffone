@@ -1,7 +1,7 @@
 #include "stream.h"
 #include "pa_ctx.h"
 
-#include "util.h"
+#include "error.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -142,7 +142,9 @@ static pa_stream *new_pa_stream(
 }
 
 static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) {
-    FFONE_RETURN_VAL_ON_FAILURE(stream, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(stream, FFONE_ERROR_INVALID_ARG);
+
+    int ret;
 
     const pa_buffer_attr buf_attr = {
         .maxlength = -1,
@@ -155,8 +157,11 @@ static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) 
         PA_STREAM_NOT_MONOTONIC | PA_STREAM_AUTO_TIMING_UPDATE |
         PA_STREAM_ADJUST_LATENCY;// | PA_STREAM_VARIABLE_RATE;
 
-    FFONE_RETURN_VAL_ON_FAILURE(pa_stream_connect_playback(stream, 
-        /* sink->base.name */ NULL, &buf_attr, flags, NULL, NULL) == 0, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        (ret = pa_stream_connect_playback(stream, 
+            /* sink->base.name */ NULL, &buf_attr, flags, NULL, NULL)) == 0,
+        FFONE_ERROR(ret)
+    );
 
     pa_stream_state_t state = PA_STREAM_UNCONNECTED;
     while (state != PA_STREAM_READY) {
@@ -164,11 +169,11 @@ static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) 
 
         state = pa_stream_get_state(stream);
         if (state == PA_STREAM_FAILED || state == PA_STREAM_TERMINATED) {
-            return -1;
+            return FFONE_ERROR_CUSTOM;
         }
     }
 
-    return 0;
+    return FFONE_SUCCESS;
 }
 
 static void stream_update_pa_stream(Stream *stream) {

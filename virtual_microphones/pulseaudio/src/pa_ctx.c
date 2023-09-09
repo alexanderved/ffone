@@ -10,6 +10,7 @@
 
 #include "util.h"
 #include "rc.h"
+#include "error.h"
 
 struct PAContext {
     RawAudioQueue *queue;
@@ -149,8 +150,8 @@ ffone_rc_ptr(RawAudioQueue) pa_ctx_get_queue(ffone_rc_ptr(PAContext)pa_ctx) {
 }
 
 int pa_ctx_execute_operation(ffone_rc_ptr(PAContext) pa_ctx, pa_operation *o) {
-    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && o, -1);
-    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), -1);
+    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && o, FFONE_ERROR_INVALID_ARG);
+    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), FFONE_ERROR_BAD_STATE);
 
     pa_operation_state_t state;
     while ((state = pa_operation_get_state(o)) == PA_OPERATION_RUNNING) {
@@ -162,7 +163,7 @@ int pa_ctx_execute_operation(ffone_rc_ptr(PAContext) pa_ctx, pa_operation *o) {
 
     pa_operation_unref(o);
 
-    return (state == PA_OPERATION_DONE) ? 0 : -1;
+    return (state == PA_OPERATION_DONE) ? FFONE_SUCCESS : FFONE_ERROR_CUSTOM;
 }
 
 int pa_ctx_load_virtual_device(
@@ -172,8 +173,11 @@ int pa_ctx_load_virtual_device(
     pa_context_index_cb_t cb,
     void *userdata
 ) {
-    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && module && args && cb, -1);
-    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx) && pa_ctx->context, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && module && args && cb, FFONE_ERROR_INVALID_ARG);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        !ffone_rc_is_destructed(pa_ctx) && pa_ctx->context,
+        FFONE_ERROR_BAD_STATE
+    );
 
     pa_operation *o = pa_context_load_module(
         pa_ctx->context,
@@ -182,7 +186,7 @@ int pa_ctx_load_virtual_device(
         cb,
         userdata
     );
-    FFONE_RETURN_VAL_ON_FAILURE(o, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(o, FFONE_ERROR_BAD_ALLOC);
 
     return pa_ctx_execute_operation(pa_ctx, o);
 }
@@ -193,9 +197,12 @@ int pa_ctx_unload_virtual_device(
     pa_context_success_cb_t cb,
     void *userdata
 ) {
-    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && cb, -1);
-    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx) && pa_ctx->context, -1);
-    FFONE_RETURN_VAL_ON_FAILURE(idx != VIRTUAL_DEVICE_INDEX_NONE, 0);
+    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && cb, FFONE_ERROR_INVALID_ARG);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        !ffone_rc_is_destructed(pa_ctx) && pa_ctx->context,
+        FFONE_ERROR_BAD_STATE
+    );
+    FFONE_RETURN_VAL_ON_FAILURE(idx != VIRTUAL_DEVICE_INDEX_NONE, FFONE_SUCCESS);
 
     pa_operation *o = pa_context_unload_module(
         pa_ctx->context,
@@ -203,21 +210,27 @@ int pa_ctx_unload_virtual_device(
         cb,
         userdata
     );
-    FFONE_RETURN_VAL_ON_FAILURE(o, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(o, FFONE_ERROR_BAD_ALLOC);
 
     return pa_ctx_execute_operation(pa_ctx, o);
 }
 
 int pa_ctx_iterate(ffone_rc_ptr(PAContext) pa_ctx, int block) {
-    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, -1);
-    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx) && pa_ctx->loop, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, FFONE_ERROR_INVALID_ARG);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        !ffone_rc_is_destructed(pa_ctx) && pa_ctx->loop,
+        FFONE_ERROR_BAD_STATE
+    );
 
-    return pa_mainloop_iterate(pa_ctx->loop, block, NULL);
+    return FFONE_ERROR(pa_mainloop_iterate(pa_ctx->loop, block, NULL));
 }
 
 int pa_ctx_update(ffone_rc_ptr(PAContext) pa_ctx, int block) {
-    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, -1);
-    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx->loop, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, FFONE_ERROR_INVALID_ARG);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        !ffone_rc_is_destructed(pa_ctx) && pa_ctx->loop,
+        FFONE_ERROR_BAD_STATE
+    );
 
     int ret = pa_ctx_iterate(pa_ctx, block);
 

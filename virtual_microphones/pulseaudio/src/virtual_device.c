@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "util.h"
+#include "error.h"
 
 struct VirtualDevice {
     ffone_weak(PAContext) pa_ctx;
@@ -21,9 +22,15 @@ static int virtual_device_new(
     const char *name,
     const char *descr
 ) {
-    FFONE_RETURN_VAL_ON_FAILURE(device && pa_ctx && name && descr, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(device && pa_ctx && name && descr, FFONE_ERROR_INVALID_ARG);
 
-    device->pa_ctx = ffone_rc_ref_weak(pa_ctx);
+    int ret;
+
+    FFONE_RETURN_VAL_ON_FAILURE(
+        device->pa_ctx = ffone_rc_ref_weak(pa_ctx),
+        FFONE_ERROR_CUSTOM
+    );
+
     device->flags = VIRTUAL_DEVICE_FLAGS_CREATED;
     device->idx = VIRTUAL_DEVICE_INDEX_NONE;
     device->name = NULL;
@@ -33,21 +40,23 @@ static int virtual_device_new(
     int pid = ffone_get_pid();
     size_t device_name_len = snprintf(NULL, 0, "%d-%s-%d", did, name, pid);
 
+    ret = FFONE_ERROR_BAD_ALLOC;
     FFONE_GOTO_ON_FAILURE(device->name = malloc(device_name_len + 1), error);
     sprintf(device->name, "%d-%s-%d", did, name, pid);
 
     printf("NAME: %s\n", device->name);
 
+    ret = FFONE_ERROR_BAD_ALLOC;
     FFONE_GOTO_ON_FAILURE(device->descr = malloc(strlen(descr) + 1), error);
     strcpy(device->descr, descr);
 
-    return 0;
+    return FFONE_SUCCESS;
 error:
     if (device->descr) free(device->descr);
     if (device->name) free(device->name);
     if (device->pa_ctx) ffone_rc_unref_weak(device->pa_ctx);
 
-    return -1;
+    return ret;
 }
 
 static void virtual_device_delete(VirtualDevice *device) {
@@ -144,11 +153,14 @@ static void virtual_source_dtor(void *opaque) {
 }
 
 static int virtual_source_load(ffone_rc_ptr(VirtualSource) src) {
-    FFONE_RETURN_VAL_ON_FAILURE(src, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(src, FFONE_ERROR_INVALID_ARG);
 
-    FFONE_RETURN_VAL_ON_FAILURE(src->master, -1);
-    FFONE_RETURN_VAL_ON_FAILURE((src->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
-        && !(src->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED), -1);
+    FFONE_RETURN_VAL_ON_FAILURE(src->master, FFONE_ERROR_BAD_STATE);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        (src->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
+            && !(src->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED),
+        FFONE_ERROR_BAD_STATE
+    );
 
     char *args = ffone_format_str(
         "source_name=%s source_properties=device.description=%s master=%s.monitor "
@@ -161,7 +173,7 @@ static int virtual_source_load(ffone_rc_ptr(VirtualSource) src) {
         1,
         "mono"
     );
-    FFONE_RETURN_VAL_ON_FAILURE(args, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(args, FFONE_ERROR_BAD_ALLOC);
 
     int ret = pa_ctx_load_virtual_device(
         src->base.pa_ctx,
@@ -173,14 +185,14 @@ static int virtual_source_load(ffone_rc_ptr(VirtualSource) src) {
 
     free(args);
 
-    return ret;
+    return FFONE_ERROR(ret);
 }
 
 static int virtual_source_unload(ffone_rc_ptr(VirtualSource) src) {
-    FFONE_RETURN_VAL_ON_FAILURE(src, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(src, FFONE_ERROR_INVALID_ARG);
     
     FFONE_RETURN_VAL_ON_FAILURE((src->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
-        && (src->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED), -1);
+        && (src->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED), FFONE_ERROR_BAD_STATE);
 
     int ret = pa_ctx_unload_virtual_device(
         src->base.pa_ctx,
@@ -189,7 +201,7 @@ static int virtual_source_unload(ffone_rc_ptr(VirtualSource) src) {
         &src->base
     );
 
-    return ret;
+    return FFONE_ERROR(ret);
 }
 
 struct VirtualSink {
@@ -237,10 +249,13 @@ static void virtual_sink_dtor(void *opaque) {
 }
 
 int virtual_sink_load(ffone_rc_ptr(VirtualSink) sink) {
-    FFONE_RETURN_VAL_ON_FAILURE(sink, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(sink, FFONE_ERROR_INVALID_ARG);
 
-    FFONE_RETURN_VAL_ON_FAILURE((sink->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
-        && !(sink->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED), -1);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        (sink->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
+            && !(sink->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED),
+        FFONE_ERROR_BAD_STATE
+    );
 
     char *args = ffone_format_str(
         "sink_name=%s sink_properties=device.description=%s "
@@ -251,7 +266,7 @@ int virtual_sink_load(ffone_rc_ptr(VirtualSink) sink) {
         1,
         "mono"
     );
-    FFONE_RETURN_VAL_ON_FAILURE(args, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(args, FFONE_ERROR_BAD_ALLOC);
 
     int ret = pa_ctx_load_virtual_device(
         sink->base.pa_ctx,
@@ -263,14 +278,17 @@ int virtual_sink_load(ffone_rc_ptr(VirtualSink) sink) {
 
     free(args);
 
-    return ret;
+    return FFONE_ERROR(ret);
 }
 
 int virtual_sink_unload(ffone_rc_ptr(VirtualSink) sink) {
-    FFONE_RETURN_VAL_ON_FAILURE(sink, -1);
+    FFONE_RETURN_VAL_ON_FAILURE(sink, FFONE_ERROR_INVALID_ARG);
 
-    FFONE_RETURN_VAL_ON_FAILURE((sink->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
-        && (sink->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED), -1);
+    FFONE_RETURN_VAL_ON_FAILURE(
+        (sink->base.flags & VIRTUAL_DEVICE_FLAGS_CREATED)
+            && (sink->base.flags & VIRTUAL_DEVICE_FLAGS_LOADED),
+        FFONE_ERROR_BAD_STATE
+    );
 
     int ret = pa_ctx_unload_virtual_device(
         sink->base.pa_ctx,
@@ -279,7 +297,7 @@ int virtual_sink_unload(ffone_rc_ptr(VirtualSink) sink) {
         &sink->base
     );
 
-    return ret;
+    return FFONE_ERROR(ret);
 }
 
 const char *virtual_sink_get_name(ffone_rc_ptr(VirtualSink) sink) {
