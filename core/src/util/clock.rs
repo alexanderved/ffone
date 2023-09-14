@@ -6,7 +6,9 @@ use std::{fmt, iter, ops};
 
 use super::RingBuffer;
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct ClockTime(u64);
 
 impl ClockTime {

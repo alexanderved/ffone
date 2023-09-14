@@ -59,13 +59,12 @@ impl MessageStream {
         Ok(())
     }
 
-    pub(super) fn recv_to_buf(&mut self) -> error::Result<()> {
+    pub(super) fn recv_to_buf(&mut self) {
         loop {
             let packet = match self.socket.read_packet() {
                 Ok(packet) => packet,
-                Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::WouldBlock => break,
                 Err(error::Error::Io(err)) if err.kind() == io::ErrorKind::Interrupted => continue,
-                Err(err) => return Err(err),
+                Err(_) => break,
             };
 
             match packet.deserialize() {
@@ -73,8 +72,6 @@ impl MessageStream {
                 Err(_) => continue,
             }
         }
-
-        Ok(())
     }
 
     pub(super) fn push(&mut self, host_msg: HostMessage) {

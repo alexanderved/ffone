@@ -6,21 +6,23 @@ mod message_stream;
 mod network;
 mod poller;
 
-use core::{audio_system::audio::EncodedAudioInfo, device::DeviceInfo};
+use core::device::DeviceInfo;
 
 use std::net::SocketAddr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LanDeviceInfo {
     pub info: DeviceInfo,
-    pub addr: SocketAddr,
+    pub msg_addr: SocketAddr,
+    pub audio_addr: SocketAddr,
 }
 
 impl LanDeviceInfo {
-    pub fn new(name: &str, addr: SocketAddr) -> Self {
+    pub fn new(name: &str, msg_addr: SocketAddr, audio_addr: SocketAddr) -> Self {
         Self {
             info: DeviceInfo::new(name),
-            addr,
+            msg_addr,
+            audio_addr,
         }
     }
 
@@ -34,10 +36,8 @@ impl LanDeviceInfo {
 #[serde(tag = "type")]
 pub enum HostMessage {
     Ping,
-    Empty,
 
-    AudioListenerStarted { port: u16 },
-    RestartAudioStream,
+    Connected { audio_port: u16 },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -47,6 +47,4 @@ pub enum DeviceMessage {
     Pong,
 
     Info { info: DeviceInfo },
-    StartAudioListener { port: u16, info: EncodedAudioInfo },
-    StopAudioListener,
 }

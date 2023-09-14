@@ -1,4 +1,7 @@
-use core::error;
+use core::{
+    error,
+    util::{vec_prepend_iter, vec_truncate_front},
+};
 
 use std::{
     io::{self, Read, Write},
@@ -15,6 +18,21 @@ impl NetworkPacket {
     pub(super) const NO_SIZE_BYTES: usize = u64::BITS as usize / 8;
 
     pub(super) const HEADER_LEN: usize = Self::HEADER_PREFIX_LEN + Self::NO_SIZE_BYTES;
+
+    pub(super) fn from_raw(data: Vec<u8>) -> Self {
+        Self(data)
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn from_bytes(mut data: Vec<u8>) -> Self {
+        let mut header = [0; Self::HEADER_LEN];
+        header[..Self::HEADER_PREFIX_LEN].clone_from_slice(&Self::HEADER_PREFIX);
+        header[Self::HEADER_PREFIX_LEN..].clone_from_slice(&data.len().to_be_bytes());
+
+        vec_prepend_iter(&mut data, header.into_iter());
+
+        Self::from_raw(data)
+    }
 
     pub(super) fn serialize<S>(data: &S) -> error::Result<Self>
     where
@@ -34,7 +52,7 @@ impl NetworkPacket {
     where
         D: for<'de> serde::Deserialize<'de>,
     {
-        Ok(serde_json::from_slice(&self.bytes()[Self::HEADER_LEN..])?)
+        Ok(serde_json::from_slice(&self.as_bytes())?)
     }
 
     pub(super) fn is_header_correct(header: &[u8]) -> bool {
@@ -48,8 +66,23 @@ impl NetworkPacket {
         u64::from_be_bytes(size_bytes) as usize
     }
 
-    pub(super) fn bytes(&self) -> &[u8] {
+    pub(super) fn as_raw(&self) -> &[u8] {
         &self.0
+    }
+
+    pub(super) fn into_raw(self) -> Vec<u8> {
+        self.0
+    }
+
+    pub(super) fn as_bytes(&self) -> &[u8] {
+        &self.as_raw()[Self::HEADER_LEN..]
+    }
+
+    pub(super) fn into_bytes(self) -> Vec<u8> {
+        let mut raw = self.into_raw();
+        vec_truncate_front(&mut raw, Self::HEADER_LEN);
+
+        raw
     }
 
     pub(super) fn len(&self) -> usize {
@@ -66,6 +99,9 @@ impl std::convert::AsRef<[u8]> for NetworkPacket {
 pub(super) trait UdpSocketExt {
     fn send_packet_to(&self, addr: SocketAddr, packet: &NetworkPacket) -> error::Result<usize>;
     fn recv_packet_from(&self) -> error::Result<(NetworkPacket, SocketAddr)>;
+
+    fn send_packet(&self, packet: &NetworkPacket) -> error::Result<usize>;
+    fn recv_packet(&self) -> error::Result<NetworkPacket>;
 }
 
 impl UdpSocketExt for mio::net::UdpSocket {
@@ -89,6 +125,27 @@ impl UdpSocketExt for mio::net::UdpSocket {
 
         Ok((NetworkPacket(bytes), sender_addr))
     }
+
+    fn send_packet(&self, packet: &NetworkPacket) -> error::Result<usize> {
+        Ok(self.send(&packet.0)?)
+    }
+
+    fn recv_packet(&self) -> error::Result<NetworkPacket> {
+        let mut header = [0u8; NetworkPacket::HEADER_LEN];
+        let header_len = self.peek(&mut header)?;
+
+        if !NetworkPacket::is_header_correct(&header) {
+            let _ = self.recv(&mut [0]);
+            return Err(error::Error::WrongNetworkPacketHeader);
+        }
+
+        let size = NetworkPacket::read_size_from_header(&header[..header_len]);
+        let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
+
+        self.recv(&mut bytes)?;
+
+        Ok(NetworkPacket(bytes))
+    }
 }
 
 impl UdpSocketExt for std::net::UdpSocket {
@@ -111,6 +168,27 @@ impl UdpSocketExt for std::net::UdpSocket {
         let (_, sender_addr) = self.recv_from(&mut bytes)?;
 
         Ok((NetworkPacket(bytes), sender_addr))
+    }
+
+    fn send_packet(&self, packet: &NetworkPacket) -> error::Result<usize> {
+        Ok(self.send(&packet.0)?)
+    }
+
+    fn recv_packet(&self) -> error::Result<NetworkPacket> {
+        let mut header = [0u8; NetworkPacket::HEADER_LEN];
+        let header_len = self.peek(&mut header)?;
+
+        if !NetworkPacket::is_header_correct(&header) {
+            let _ = self.recv(&mut [0]);
+            return Err(error::Error::WrongNetworkPacketHeader);
+        }
+
+        let size = NetworkPacket::read_size_from_header(&header[..header_len]);
+        let mut bytes = vec![0; NetworkPacket::HEADER_LEN + size];
+
+        self.recv(&mut bytes)?;
+
+        Ok(NetworkPacket(bytes))
     }
 }
 

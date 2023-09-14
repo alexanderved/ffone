@@ -18,6 +18,7 @@ struct FakeDevice {
 
 impl FakeDevice {
     const PORT: u16 = 31707;
+    const AUDIO_PORT: u16 = 31708;
 
     fn new(name: &str, recv: MessageReceiver<StopDevice>) -> error::Result<Self> {
         let broadcast_socket = UdpSocket::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))?;
@@ -40,7 +41,8 @@ impl Runnable for FakeDevice {
 
         let identity_packet = IdentityPacket {
             name: self.name.clone(),
-            port: Self::PORT,
+            msg_port: Self::PORT,
+            audio_port: Self::AUDIO_PORT,
         };
         let data = NetworkPacket::serialize(&identity_packet)?;
 

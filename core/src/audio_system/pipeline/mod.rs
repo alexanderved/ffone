@@ -1,9 +1,11 @@
 pub mod audio_decoder;
+pub mod demuxer;
 pub mod resizer;
 pub mod sync;
 pub mod virtual_microphone;
 
 use audio_decoder::*;
+use demuxer::*;
 use resizer::AudioResizer;
 use sync::*;
 use virtual_microphone::*;
@@ -111,6 +113,7 @@ pub(super) type AudioPipelineStateMachine = RunnableStateMachine<AudioPipeline>;
 
 // TODO: Make extendable and polymorphic.
 pub(super) struct AudioPipeline {
+    demux: Option<AudioDemuxer>,
     dec: Option<Box<dyn AudioDecoder>>,
     sync: Option<Synchronizer>,
     resizer: Option<AudioResizer>,
@@ -123,6 +126,7 @@ pub(super) struct AudioPipeline {
 impl AudioPipeline {
     pub(super) fn new() -> Self {
         Self {
+            demux: None,
             dec: None,
             sync: None,
             resizer: None,
@@ -133,11 +137,21 @@ impl AudioPipeline {
     }
 
     add_pipeline_element! {
+        @element AudioDemuxer;
+
+        @long_name audio_demuxer;
+        @name demux;
+
+        @next dec;
+    }
+
+    add_pipeline_element! {
         @element Box<dyn AudioDecoder>;
 
         @long_name audio_decoder;
         @name dec;
 
+        @prev demux;
         @next sync;
     }
 
@@ -146,7 +160,7 @@ impl AudioPipeline {
 
         @long_name synchronizer;
         @name sync;
-        
+
         @prev dec;
         @next resizer;
     }

@@ -2,8 +2,8 @@ mod gst_context;
 
 use gst_context::GstContext;
 
-use core::audio_system::audio::{EncodedAudioBuffer, EncodedAudioInfo, TimestampedRawAudioBuffer};
-use core::audio_system::element::{AudioSource, AudioSystemElementMessage};
+use core::audio_system::audio::{EncodedAudioBuffer, TimestampedRawAudioBuffer, EncodedAudioHeader};
+use core::audio_system::element::{AudioSource, AudioSystemElementMessage, AudioSink, AudioFilter};
 use core::audio_system::pipeline::audio_decoder::{AudioDecoder, AudioDecoderInfo};
 use core::error;
 use core::mueue::*;
@@ -11,12 +11,28 @@ use core::util::{ControlFlow, Element, Runnable};
 
 pub struct GstDecoder {
     send: MessageSender<AudioSystemElementMessage>,
+
+    input: Option<MessageReceiver<EncodedAudioBuffer>>,
     output: Option<MessageSender<TimestampedRawAudioBuffer>>,
 
+    audio_info: Option<EncodedAudioHeader>,
     context: Option<GstContext>,
 }
 
 impl GstDecoder {
+    fn update_audio_info(&mut self, info: EncodedAudioHeader) {
+        if self.audio_info == Some(info) {
+            return;
+        }
+
+        self.drain();
+        self.context = Some(GstContext::new(info));
+
+        if self.context.is_some() {
+            self.audio_info = Some(info);
+        }
+    }
+
     fn drain(&self) {
         let Some(context) = self.context.as_ref() else {
             return;
@@ -34,25 +50,31 @@ impl GstDecoder {
                 }
             }
         }
-
-        self.send_eos();
     }
 }
 
 impl Runnable for GstDecoder {
     fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
-        let Some(output) = self.output.as_ref() else {
+        let Some(input) = self.input.clone() else {
             return Ok(());
         };
+
+        while let Some(audio) = input.recv() {
+            self.update_audio_info(audio.header);
+
+            if let Some(context) = self.context.as_ref() {
+                context.push(audio);
+            }
+        }
+
         let Some(context) = self.context.as_ref() else {
             return Ok(());
         };
-        if context.is_eos() {
-            return Ok(());
-        }
 
         while let Some(audio) = context.pull() {
-            let _ = output.send(audio);
+            if let Some(output) = self.output.as_ref() {
+                let _ = output.send(audio);
+            }
         }
 
         Ok(())
@@ -84,6 +106,20 @@ impl Element for GstDecoder {
     }
 }
 
+impl AudioSink<EncodedAudioBuffer> for GstDecoder {
+    fn input(&self) -> Option<MessageReceiver<EncodedAudioBuffer>> {
+        self.input.clone()
+    }
+
+    fn set_input(&mut self, input: MessageReceiver<EncodedAudioBuffer>) {
+        self.input = Some(input);
+    }
+
+    fn unset_input(&mut self) {
+        self.input = None;
+    }
+}
+
 impl AudioSource<TimestampedRawAudioBuffer> for GstDecoder {
     fn output(&self) -> Option<MessageSender<TimestampedRawAudioBuffer>> {
         self.output.clone()
@@ -98,21 +134,12 @@ impl AudioSource<TimestampedRawAudioBuffer> for GstDecoder {
     }
 }
 
+impl AudioFilter<EncodedAudioBuffer, TimestampedRawAudioBuffer> for GstDecoder {}
+
 impl AudioDecoder for GstDecoder {
     fn info(&self) -> AudioDecoderInfo {
         AudioDecoderInfo {
             name: "Gstreamer Audio Decoder".to_string(),
-        }
-    }
-
-    fn set_audio_info(&mut self, info: EncodedAudioInfo) {
-        self.drain();
-        self.context = Some(GstContext::new(info));
-    }
-
-    fn enqueue_audio_buffer(&mut self, buf: EncodedAudioBuffer) {
-        if let Some(context) = self.context.as_ref() {
-            context.push(buf);
         }
     }
 }

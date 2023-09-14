@@ -1,20 +1,28 @@
 use super::*;
 
-const OGG_FILE: &'static [u8] = include_bytes!("test.ogg");
-const DECODED_OGG_FILE: &'static str = include_str!("decoded_test.json");
+const OPUS_DATA: &'static str = include_str!("test.opus.data");
+const RAW_DATA: &'static str = include_str!("test.raw.data");
 
 #[test]
-fn test_decode_ogg() {
+fn test_decode_opus() {
     gst::init().unwrap();
 
-    let ctx = GstContext::new(EncodedAudioInfo {
-        format: AudioFormat::Ogg,
+    let header = EncodedAudioHeader {
         codec: AudioCodec::Opus,
         sample_rate: 48000,
-    });
+    };
 
-    let encoded_audio = EncodedAudioBuffer(Vec::from(OGG_FILE));
-    ctx.push(encoded_audio);
+    let ctx = GstContext::new(header);
+
+    let opus_buffers: Vec<Vec<u8>> = serde_json::from_str(OPUS_DATA).unwrap();
+    for data in opus_buffers {
+        let encoded_audio = EncodedAudioBuffer {
+            header,
+            start_ts: ClockTime::from_nanos(0),
+            data,
+        };
+        ctx.push(encoded_audio);
+    }
     ctx.push_eos();
 
     let mut decoded_audio = vec![];
@@ -24,9 +32,10 @@ fn test_decode_ogg() {
         }
 
         let Some(audio) = ctx.pull() else { continue };
+        
         decoded_audio.extend_from_slice(audio.as_slice());
     }
 
     let decoded_audio_json = serde_json::to_string(&decoded_audio).unwrap();
-    assert_eq!(decoded_audio_json, DECODED_OGG_FILE);
+    assert_eq!(decoded_audio_json, RAW_DATA);
 }

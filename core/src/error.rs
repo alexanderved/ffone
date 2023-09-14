@@ -17,6 +17,10 @@ pub enum Error {
     DeviceUnlinked,
     #[error("The transition from the current runnable state to the next one is forbidden")]
     WrongRunnableState,
+    #[error("Failed to cast integer to enum")]
+    IntToEnumCastFailed,
+    #[error("Failed to parse encoded audio header")]
+    EncodedAudioHeaderParseFailed,
     #[error("Other error occured: {0}")]
     Other(String),
 }

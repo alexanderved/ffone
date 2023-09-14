@@ -31,6 +31,7 @@ impl Poller {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(super) fn deregister_message_stream(
         &mut self,
         msg_stream: &mut MessageStream,
@@ -51,6 +52,7 @@ impl Poller {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(super) fn deregister_audio_stream(
         &mut self,
         audio_stream: &mut AudioStream,
@@ -63,25 +65,21 @@ impl Poller {
     pub(super) fn poll(
         &mut self,
         message_stream: &mut MessageStream,
-        mut audio_stream: Option<&mut AudioStream>,
+        audio_stream: &mut AudioStream,
     ) -> error::Result<()> {
         let _ = message_stream.send_from_buf();
 
         self.poll
-            .poll(&mut self.events, Some(Duration::from_millis(0)))?;
+            .poll(&mut self.events, Some(Duration::ZERO))?;
         for e in self.events.iter() {
             match e.token() {
                 MESSAGE => {
                     if e.is_readable() {
-                        let _ = message_stream.recv_to_buf();
+                        message_stream.recv_to_buf();
                     }
                 }
                 AUDIO => {
                     if e.is_readable() {
-                        let Some(audio_stream) = audio_stream.as_deref_mut() else {
-                            continue;
-                        };
-
                         audio_stream.recv_to_buf();
                     }
                 }

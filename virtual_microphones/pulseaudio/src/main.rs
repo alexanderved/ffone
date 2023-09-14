@@ -19,7 +19,7 @@ fn main() {
             data.push((accum * 255.0) as u8);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8))
+        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8, 8000))
     }
 
     let mut accum: f64 = 0.0;
@@ -37,7 +37,7 @@ fn main() {
             data.extend(bytes);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::S16LE))
+        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::S16LE, 8000))
     }
 
     let mut accum: f64 = 0.0;
@@ -52,7 +52,7 @@ fn main() {
             data.push((accum * 255.0) as u8);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8))
+        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8, 8000))
     }
 
     unsafe {

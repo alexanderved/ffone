@@ -1,7 +1,6 @@
 use super::*;
 
-use crate::audio_system::audio::EncodedAudioBuffer;
-use crate::audio_system::audio::EncodedAudioInfo;
+use crate::audio_system::audio::MuxedAudioBuffer;
 use crate::error;
 use crate::util::*;
 
@@ -14,8 +13,7 @@ pub enum DeviceSystemElementMessage {
 
     LinkedDeviceInfo(DeviceInfo),
 
-    EncodedAudioReceived(EncodedAudioBuffer),
-    AudioInfoReceived(EncodedAudioInfo),
+    MuxedAudioReceived(MuxedAudioBuffer),
 
     DeviceUnlinked,
 

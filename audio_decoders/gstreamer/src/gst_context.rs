@@ -2,36 +2,36 @@
 mod tests;
 
 use core::audio_system::audio::{
-    AudioCodec, AudioFormat, EncodedAudioBuffer, EncodedAudioInfo, RawAudioBuffer, RawAudioFormat,
-    TimestampedRawAudioBuffer,
+    AudioCodec, /* AudioFormat, */ EncodedAudioBuffer,
+    RawAudioBuffer, RawAudioFormat,
+    TimestampedRawAudioBuffer, EncodedAudioHeader,
 };
 use core::util::ClockTime;
 
 use gst::{
     prelude::{Cast, GstBinExtManual},
-    traits::{ElementExt, PadExt},
+    traits::ElementExt,
 };
 use gstreamer as gst;
 use gstreamer_app as gst_app;
 
 #[allow(dead_code)]
 pub(super) struct GstContext {
-    audio_info: EncodedAudioInfo,
+    audio_info: EncodedAudioHeader,
 
-    pipeline: gst::Pipeline,
+    pub pipeline: gst::Pipeline,
 
     src: gst_app::AppSrc,
-    demuxer: gst::Element,
     parser: gst::Element,
     decoder: gst::Element,
     sink: gst_app::AppSink,
 }
 
 impl GstContext {
-    pub(super) fn new(audio_info: EncodedAudioInfo) -> Self {
+    pub(super) fn new(audio_info: EncodedAudioHeader) -> Self {
         let pipeline = gst::Pipeline::new(Some("gst_audio_decoder_pipeline"));
 
-        let caps = gst::Caps::builder(mime_from_format(audio_info.format))
+        let caps = gst::Caps::builder(mime_from_codec(audio_info.codec))
             .field("rate", audio_info.sample_rate)
             .field("channels", 1)
             .build();
@@ -41,30 +41,10 @@ impl GstContext {
             .stream_type(gst_app::AppStreamType::Stream)
             .build();
 
-        let demuxer = gst::ElementFactory::make(demuxer_name_from_format(audio_info.format))
-            .name("demuxer")
-            .build()
-            .unwrap();
         let parser = gst::ElementFactory::make(parser_name_from_codec(audio_info.codec))
             .name("parser")
             .build()
             .unwrap();
-        demuxer.connect_pad_added({
-            let parser = parser.clone();
-            move |_, pad| {
-                let Some(sink_pad) = parser.static_pad("sink") else { return };
-                let Some(caps) = pad.caps() else { return };
-
-                for structure in caps.iter() {
-                    let pad_type = structure.name();
-
-                    if pad_type.starts_with(mime_from_codec(audio_info.codec)) {
-                        pad.link(&sink_pad).unwrap();
-                        return;
-                    }
-                }
-            }
-        });
 
         let decoder = gst::ElementFactory::make(decoder_name_from_codec(audio_info.codec))
             .name("decoder")
@@ -76,14 +56,17 @@ impl GstContext {
         pipeline
             .add_many(&[
                 src.upcast_ref(),
-                &demuxer,
                 &parser,
                 &decoder,
                 sink.upcast_ref(),
             ])
             .unwrap();
-        gst::Element::link_many(&[src.upcast_ref(), &demuxer]).unwrap();
-        gst::Element::link_many(&[&parser, &decoder, sink.upcast_ref()]).unwrap();
+        gst::Element::link_many(&[
+            src.upcast_ref(),
+            &parser,
+            &decoder,
+            sink.upcast_ref()
+        ]).unwrap();
 
         let this = Self {
             audio_info,
@@ -91,7 +74,6 @@ impl GstContext {
             pipeline,
 
             src,
-            demuxer,
             parser,
             decoder,
             sink,
@@ -102,7 +84,7 @@ impl GstContext {
     }
 
     pub(super) fn push(&self, buffer: EncodedAudioBuffer) {
-        let gst_buffer = gst::Buffer::from_slice(buffer.0);
+        let gst_buffer = gst::Buffer::from_slice(buffer.data);
 
         let _ = self.src.push_buffer(gst_buffer);
     }
@@ -112,7 +94,7 @@ impl GstContext {
             .sink
             .try_pull_sample(Some(gst::ClockTime::from_mseconds(1)))?;
 
-        let raw = raw_audio_buffer_from_sample(&sample)?;
+        let raw = raw_audio_buffer_from_sample(&sample, self.audio_info)?;
         let (start, dur) = timestamps_from_sample(&sample, &raw, self.audio_info);
 
         Some(TimestampedRawAudioBuffer::new(raw, start, dur))
@@ -141,34 +123,16 @@ impl GstContext {
     }
 }
 
-fn mime_from_format(format: AudioFormat) -> &'static str {
-    match format {
-        AudioFormat::MpegTS => "video/mpegts",
-        AudioFormat::Ogg => "audio/ogg",
-        AudioFormat::Unspecified => panic!("Unsupported audio format"),
-    }
-}
-
 fn mime_from_codec(codec: AudioCodec) -> &'static str {
     match codec {
         AudioCodec::Opus => "audio/x-opus",
-        AudioCodec::Vorbis => "audio/x-vorbis",
         AudioCodec::Unspecified => panic!("Unsupported audio codec"),
-    }
-}
-
-fn demuxer_name_from_format(format: AudioFormat) -> &'static str {
-    match format {
-        AudioFormat::MpegTS => "tsdemux",
-        AudioFormat::Ogg => "oggdemux",
-        AudioFormat::Unspecified => panic!("Unsupported audio format"),
     }
 }
 
 fn parser_name_from_codec(codec: AudioCodec) -> &'static str {
     match codec {
         AudioCodec::Opus => "opusparse",
-        AudioCodec::Vorbis => "vorbisparse",
         AudioCodec::Unspecified => panic!("Unsupported audio codec"),
     }
 }
@@ -176,7 +140,6 @@ fn parser_name_from_codec(codec: AudioCodec) -> &'static str {
 fn decoder_name_from_codec(codec: AudioCodec) -> &'static str {
     match codec {
         AudioCodec::Opus => "opusdec",
-        AudioCodec::Vorbis => "vorbisdec",
         AudioCodec::Unspecified => panic!("Unsupported audio codec"),
     }
 }
@@ -204,20 +167,23 @@ fn raw_audio_format_from_caps(caps: &gst::CapsRef) -> Option<RawAudioFormat> {
     None
 }
 
-fn raw_audio_buffer_from_sample(sample: &gst::Sample) -> Option<RawAudioBuffer> {
+fn raw_audio_buffer_from_sample(
+    sample: &gst::Sample,
+    audio_info: EncodedAudioHeader,
+) -> Option<RawAudioBuffer> {
     let caps = sample.caps()?;
     let format = raw_audio_format_from_caps(caps)?;
 
     let buffer = sample.buffer()?;
     let data = buffer.map_readable().ok()?.as_slice().to_vec();
 
-    Some(RawAudioBuffer::new(data, format))
+    Some(RawAudioBuffer::new(data, format, audio_info.sample_rate))
 }
 
 fn timestamps_from_sample(
     sample: &gst::Sample,
     raw_audio_buffer: &RawAudioBuffer,
-    audio_info: EncodedAudioInfo,
+    audio_info: EncodedAudioHeader,
 ) -> (Option<ClockTime>, ClockTime) {
     let raw_audio_duration = ClockTime::from_nanos(
         raw_audio_buffer.no_samples() as u64 * ClockTime::NANOS_IN_SEC

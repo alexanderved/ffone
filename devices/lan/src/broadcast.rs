@@ -16,7 +16,8 @@ const IDENTITY_RECEIVABLE: Token = Token(1);
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(super) struct IdentityPacket {
     pub(super) name: String,
-    pub(super) port: u16,
+    pub(super) msg_port: u16,
+    pub(super) audio_port: u16,
 }
 
 impl From<(IdentityPacket, IpAddr)> for LanDeviceInfo {
@@ -25,7 +26,8 @@ impl From<(IdentityPacket, IpAddr)> for LanDeviceInfo {
             info: DeviceInfo {
                 name: net_packet.name,
             },
-            addr: SocketAddr::new(ip_addr, net_packet.port),
+            msg_addr: SocketAddr::new(ip_addr, net_packet.msg_port),
+            audio_addr: SocketAddr::new(ip_addr, net_packet.audio_port),
         }
     }
 }

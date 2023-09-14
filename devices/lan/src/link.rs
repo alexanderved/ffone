@@ -26,7 +26,7 @@ pub struct LanLink {
 
     poller: Poller,
     msg_stream: MessageStream,
-    audio_stream: Option<AudioStream>,
+    audio_stream: AudioStream,
 
     ping_timer: Timer,
     pong_timer: Timer,
@@ -34,13 +34,25 @@ pub struct LanLink {
 
 impl LanLink {
     pub fn new(info: LanDeviceInfo) -> error::Result<Self> {
+        let mut poller = Poller::new().unwrap();
+
+        let mut msg_stream = MessageStream::new(info.msg_addr).unwrap();
+        poller.register_message_stream(&mut msg_stream).unwrap();
+
+        let mut audio_stream = AudioStream::new(info.audio_addr).unwrap();
+        poller.register_audio_stream(&mut audio_stream).unwrap();
+
+        msg_stream.push(HostMessage::Connected {
+            audio_port: audio_stream.socket().local_addr().unwrap().port(),
+        });
+
         Ok(Self {
             send: None,
             info: info.clone(),
 
-            poller: Poller::new()?,
-            msg_stream: MessageStream::new(info.addr)?,
-            audio_stream: None,
+            poller,
+            msg_stream,
+            audio_stream,
 
             ping_timer: Timer::new(PING_INTERVAL),
             pong_timer: Timer::new(PONG_INTERVAL),
@@ -58,8 +70,8 @@ impl LanLink {
     }
 
     fn handle_audio(&mut self) {
-        while let Some(audio) = self.audio_stream.as_mut().and_then(AudioStream::pull) {
-            self.send(DeviceSystemElementMessage::EncodedAudioReceived(audio));
+        while let Some(audio) = self.audio_stream.pull() {
+            self.send(DeviceSystemElementMessage::MuxedAudioReceived(audio));
         }
     }
 
@@ -68,21 +80,12 @@ impl LanLink {
             match msg {
                 DeviceMessage::Pong => self.on_pong_received(),
                 DeviceMessage::Info { info } => self.on_info_received(info),
-                DeviceMessage::StartAudioListener { port, info } => {
-                    self.on_start_audio_listener(port, info)
-                }
-                DeviceMessage::StopAudioListener => self.on_stop_audio_listener(),
             }
         }
     }
 
     fn ping(&mut self) {
         self.msg_stream.push(HostMessage::Ping);
-    }
-
-    fn audio_listener_started(&mut self, port: u16) {
-        self.msg_stream
-            .push(HostMessage::AudioListenerStarted { port });
     }
 
     fn on_pong_received(&self) {
@@ -92,28 +95,6 @@ impl LanLink {
     fn on_info_received(&mut self, info: DeviceInfo) {
         self.info.info = info.clone();
         self.send(DeviceSystemElementMessage::LinkedDeviceInfo(info));
-    }
-
-    fn on_start_audio_listener(&mut self, port: u16, info: EncodedAudioInfo) {
-        if let Some(mut audio_stream) = self.audio_stream.take() {
-            let _ = self.poller.deregister_audio_stream(&mut audio_stream);
-        }
-
-        self.audio_stream = AudioStream::new((self.info.addr.ip(), port).into()).ok();
-        if let Some(audio_stream) = self.audio_stream.as_mut() {
-            let _ = self.poller.register_audio_stream(audio_stream);
-
-            let port = audio_stream.socket().local_addr().unwrap().port();
-            self.audio_listener_started(port);
-        }
-
-        self.send(DeviceSystemElementMessage::AudioInfoReceived(info));
-    }
-
-    fn on_stop_audio_listener(&mut self) {
-        if let Some(mut audio_stream) = self.audio_stream.take() {
-            let _ = self.poller.deregister_audio_stream(&mut audio_stream);
-        }
     }
 }
 
@@ -134,26 +115,11 @@ impl Runnable for LanLink {
         self.handle_ping(flow);
 
         self.poller
-            .poll(&mut self.msg_stream, self.audio_stream.as_mut())?;
+            .poll(&mut self.msg_stream, &mut self.audio_stream)?;
         self.handle_audio();
         self.handle_device_messages();
 
         Ok(())
-    }
-
-    fn on_start(&mut self) {
-        let _ = self.poller.register_message_stream(&mut self.msg_stream);
-
-        if let Some(audio_stream) = self.audio_stream.as_mut() {
-            let _ = self.poller.register_audio_stream(audio_stream);
-        }
-    }
-
-    fn on_stop(&mut self) {
-        let _ = self.poller.deregister_message_stream(&mut self.msg_stream);
-        if let Some(audio_stream) = self.audio_stream.as_mut() {
-            let _ = self.poller.deregister_audio_stream(audio_stream);
-        }
     }
 }
 

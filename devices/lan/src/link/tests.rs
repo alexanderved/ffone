@@ -3,7 +3,7 @@
 use super::*;
 use crate::network::*;
 
-use core::audio_system::audio::{AudioCodec, AudioFormat, EncodedAudioBuffer};
+use core::audio_system::audio::{AudioCodec, MuxedAudioBuffer};
 use core::util::RunnableStateMachine;
 use std::net::{Ipv4Addr, TcpListener, TcpStream, UdpSocket};
 use std::thread::{self, JoinHandle};
@@ -25,9 +25,8 @@ struct FakeDevice {
 }
 
 impl FakeDevice {
-    const AUDIO_FORMAT: AudioFormat = AudioFormat::MpegTS;
     const AUDIO_CODEC: AudioCodec = AudioCodec::Opus;
-    const AUDIO_SAMPLE_RATE: u32 = 44100;
+    const AUDIO_SAMPLE_RATE: u32 = 48000;
 
     fn new(
         name: &str,
@@ -71,7 +70,8 @@ impl Runnable for FakeDevice {
         }
 
         if let Some(addr) = self.audio_listener_addr {
-            self.audio_stream.send_to(&[42; 42], addr)?;
+            let packet = NetworkPacket::from_bytes([42; 42].to_vec());
+            self.audio_stream.send_packet_to(addr, &packet)?;
         }
 
         let mut msg_stream = self
@@ -84,12 +84,11 @@ impl Runnable for FakeDevice {
 
         let packet = match msg {
             HostMessage::Ping => NetworkPacket::serialize(&DeviceMessage::Pong),
-            HostMessage::AudioListenerStarted { port } => {
+            HostMessage::Connected { audio_port } => {
                 let ip = msg_stream.peer_addr().unwrap().ip();
-                self.audio_listener_addr = Some((ip, port).into());
+                self.audio_listener_addr = Some((ip, audio_port).into());
                 return Ok(());
             }
-            _ => return Ok(()),
         };
 
         msg_stream.write_packet(&packet?)?;
@@ -98,23 +97,9 @@ impl Runnable for FakeDevice {
     }
 
     fn on_start(&mut self) {
-        let mut msg_stream = self.listener.accept().unwrap().0;
+        let msg_stream = self.listener.accept().unwrap().0;
         msg_stream.set_nonblocking(true).unwrap();
         msg_stream.set_nodelay(true).unwrap();
-
-        msg_stream
-            .write_packet(
-                &NetworkPacket::serialize(&DeviceMessage::StartAudioListener {
-                    port: self.audio_port(),
-                    info: EncodedAudioInfo {
-                        format: Self::AUDIO_FORMAT,
-                        codec: Self::AUDIO_CODEC,
-                        sample_rate: Self::AUDIO_SAMPLE_RATE,
-                    },
-                })
-                .unwrap(),
-            )
-            .unwrap();
 
         self.msg_stream = Some(msg_stream);
     }
@@ -140,7 +125,8 @@ fn stop_device((device_send, device_handle): (MessageSender<StopDevice>, JoinHan
 }
 
 fn create_link(
-    port: u16,
+    msg_port: u16,
+    audio_port: u16,
 ) -> error::Result<(
     RunnableStateMachine<LanLink>,
     MessageReceiver<DeviceSystemElementMessage>,
@@ -148,7 +134,8 @@ fn create_link(
     let (link_send, link_recv) = unidirectional_queue();
     let mut link = LanLink::new(LanDeviceInfo::new(
         "fake",
-        (Ipv4Addr::LOCALHOST, port).into(),
+        (Ipv4Addr::LOCALHOST, msg_port).into(),
+        (Ipv4Addr::LOCALHOST, audio_port).into(),
     ))?;
     link.connect(link_send);
     let mut link = RunnableStateMachine::new(link);
@@ -160,8 +147,9 @@ fn create_link(
 #[test]
 fn test_on_info_received() -> error::Result<()> {
     let device_port = 31707;
-    let (device_send, device_handle) = run_device("fake", device_port, 31708)?;
-    let (mut link, _link_recv) = create_link(device_port)?;
+    let audio_port = 31708;
+    let (device_send, device_handle) = run_device("fake", device_port, audio_port)?;
+    let (mut link, _link_recv) = create_link(device_port, audio_port)?;
 
     let mut info = DeviceInfo::new("");
     while let Some(_) = link.proceed() {
@@ -178,56 +166,23 @@ fn test_on_info_received() -> error::Result<()> {
 }
 
 #[test]
-fn test_on_audio_info_received() -> error::Result<()> {
-    let device_port = 31709;
-    let (device_send, device_handle) = run_device("fake", device_port, 31710)?;
-    let (mut link, link_recv) = create_link(device_port)?;
-
-    let mut info = EncodedAudioInfo {
-        format: AudioFormat::Unspecified,
-        codec: AudioCodec::Unspecified,
-        sample_rate: 0,
-    };
-    let mut port = 0;
-    while let Some(_) = link.proceed() {
-        if let Some(DeviceSystemElementMessage::AudioInfoReceived(i)) = link_recv.recv() {
-            info = i;
-            if let Some(audio_stream) = link.runnable().audio_stream.as_ref() {
-                port = audio_stream.socket().peer_addr().map_or(0, |a| a.port());
-            }
-
-            break;
-        }
-    }
-    link.stop()?;
-
-    assert_eq!(info.format, FakeDevice::AUDIO_FORMAT);
-    assert_eq!(info.codec, FakeDevice::AUDIO_CODEC);
-    assert_eq!(info.sample_rate, FakeDevice::AUDIO_SAMPLE_RATE);
-    assert_eq!(port, 31710);
-
-    stop_device((device_send, device_handle));
-
-    Ok(())
-}
-
-#[test]
 fn test_on_encoded_audio_received() -> error::Result<()> {
     let device_port = 31711;
-    let (device_send, device_handle) = run_device("fake", device_port, 31712)?;
-    let (mut link, link_recv) = create_link(device_port)?;
+    let audio_port = 31712;
+    let (device_send, device_handle) = run_device("fake", device_port, audio_port)?;
+    let (mut link, link_recv) = create_link(device_port, audio_port)?;
 
-    let mut encoded_audio_buffer = EncodedAudioBuffer(vec![]);
+    let mut muxed_audio_buffer = MuxedAudioBuffer(vec![]);
     while let Some(_) = link.proceed() {
-        if let Some(DeviceSystemElementMessage::EncodedAudioReceived(a)) = link_recv.recv() {
-            encoded_audio_buffer = a;
+        if let Some(DeviceSystemElementMessage::MuxedAudioReceived(buf)) = link_recv.recv() {
+            muxed_audio_buffer = buf;
 
             break;
         }
     }
     link.stop()?;
 
-    assert_eq!(encoded_audio_buffer, EncodedAudioBuffer(vec![42; 42]));
+    assert_eq!(muxed_audio_buffer, MuxedAudioBuffer(vec![42; 42]));
 
     stop_device((device_send, device_handle));
 

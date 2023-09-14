@@ -36,6 +36,32 @@ pub fn vec_truncate_front<T>(vec: &mut Vec<T>, len: usize) {
     }
 }
 
+pub fn vec_prepend_iter<T, I>(vec: &mut Vec<T>, iter: I)
+where
+    I: Iterator<Item = T> + ExactSizeIterator,
+{
+    let len = iter.len();
+    if len == 0 {
+        return;
+    }
+    vec.reserve(len);
+
+    let vec_len = vec.len();
+    let vec_start = vec.as_mut_ptr();
+    let mut vec_cursor = vec_start;
+    unsafe {
+        ptr::copy(vec_start, vec_start.add(len), vec_len);
+
+        for value in iter {
+            vec_cursor.write(value);
+
+            vec_cursor = vec_cursor.add(1);
+        }
+
+        vec.set_len(vec_len + len);
+    }
+}
+
 #[macro_export]
 macro_rules! try_block {
     (

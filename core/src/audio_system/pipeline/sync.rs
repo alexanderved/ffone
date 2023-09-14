@@ -174,7 +174,7 @@ impl AudioSource<ResizableRawAudioBuffer> for Synchronizer {
     fn output(&self) -> Option<MessageSender<ResizableRawAudioBuffer>> {
         self.output.clone()
     }
-    
+
     fn set_output(&mut self, output: MessageSender<ResizableRawAudioBuffer>) {
         self.output = Some(output);
     }

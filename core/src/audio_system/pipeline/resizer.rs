@@ -221,7 +221,7 @@ fn upsample(audio: RawAudioBuffer, mut desired_no_samples: usize) -> RawAudioBuf
     let last_sample = Sample::from_bytes(last_sample_bytes, audio.format());
     new_audio_bytes.extend(&last_sample.to_bytes()[..no_bytes]);
 
-    RawAudioBuffer::new(new_audio_bytes, audio.format())
+    RawAudioBuffer::new(new_audio_bytes, audio.format(), audio.sample_rate())
 }
 
 fn interpolate_samples(
@@ -252,9 +252,9 @@ impl Element for AudioResizer {
 
 impl AudioSink<ResizableRawAudioBuffer> for AudioResizer {
     fn input(&self) -> Option<MessageReceiver<ResizableRawAudioBuffer>> {
-        self.input.clone()    
+        self.input.clone()
     }
-    
+
     fn set_input(&mut self, input: MessageReceiver<ResizableRawAudioBuffer>) {
         self.input = Some(input);
     }
@@ -268,7 +268,7 @@ impl AudioSource<RawAudioBuffer> for AudioResizer {
     fn output(&self) -> Option<MessageSender<RawAudioBuffer>> {
         self.output.clone()
     }
-    
+
     fn set_output(&mut self, output: MessageSender<RawAudioBuffer>) {
         self.output = Some(output);
     }

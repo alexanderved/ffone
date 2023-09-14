@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn test_discard() {
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE, 0);
     let discraded_audio = vec![4, 5, 6, 1, 2, 3];
 
     assert_eq!(discard(audio, 2).as_slice(), discraded_audio);
@@ -13,7 +13,7 @@ fn test_discard() {
 fn test_downsample_int_rate() {
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
 
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE, 0);
     let downsampled_audio = {
         let first = i32::from_be_bytes([0, 1, 2, 3]);
         let second = i32::from_be_bytes([0, 4, 5, 6]);
@@ -33,7 +33,7 @@ fn test_downsample_int_rate() {
         downsampled_audio
     );
 
-    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
+    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE, 0);
     let downsampled_audio = {
         let first = i32::from_le_bytes([1, 2, 3, 0]);
         let second = i32::from_le_bytes([4, 5, 6, 0]);
@@ -55,7 +55,7 @@ fn test_downsample_int_rate() {
 
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
 
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE, 0);
     let downsampled_audio = {
         let first = i32::from_be_bytes([0, 1, 2, 3]);
         let second = i32::from_be_bytes([0, 4, 5, 6]);
@@ -72,7 +72,7 @@ fn test_downsample_int_rate() {
         downsampled_audio
     );
 
-    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
+    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE, 0);
     let downsampled_audio = {
         let first = i32::from_le_bytes([1, 2, 3, 0]);
         let second = i32::from_le_bytes([4, 5, 6, 0]);
@@ -94,7 +94,7 @@ fn test_downsample_int_rate() {
 fn test_downsample_real_rate() {
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3];
 
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE, 0);
     let downsampled_audio = {
         let first = i32::from_be_bytes([0, 1, 2, 3]);
         let second = i32::from_be_bytes([0, 4, 5, 6]);
@@ -112,7 +112,7 @@ fn test_downsample_real_rate() {
         downsampled_audio
     );
 
-    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
+    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE, 0);
     let downsampled_audio = {
         let first = i32::from_le_bytes([1, 2, 3, 0]);
         let second = i32::from_le_bytes([4, 5, 6, 0]);
@@ -132,7 +132,7 @@ fn test_downsample_real_rate() {
 
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
 
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE, 0);
     let downsampled_audio = {
         let first = i32::from_be_bytes([0, 1, 2, 3]);
         let second = i32::from_be_bytes([0, 4, 5, 6]);
@@ -150,7 +150,7 @@ fn test_downsample_real_rate() {
         downsampled_audio
     );
 
-    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE);
+    let audio = RawAudioBuffer::new(data, RawAudioFormat::S24LE, 0);
     let downsampled_audio = {
         let first = i32::from_le_bytes([1, 2, 3, 0]);
         let second = i32::from_le_bytes([4, 5, 6, 0]);
@@ -172,7 +172,7 @@ fn test_downsample_real_rate() {
 #[test]
 fn test_upsample_int_rate() {
     let data = vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
-    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE);
+    let audio = RawAudioBuffer::new(data.clone(), RawAudioFormat::S24BE, 0);
     let desired_no_samples = audio.no_samples() * 3 / 2;
 
     let new_audio = upsample(audio, desired_no_samples);

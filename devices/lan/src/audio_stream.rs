@@ -1,15 +1,16 @@
-use core::{audio_system::audio::EncodedAudioBuffer, error};
+use core::{audio_system::audio::MuxedAudioBuffer, error};
 use mio::net::*;
 use std::{
     collections::VecDeque,
     net::{Ipv4Addr, SocketAddr},
 };
 
+use crate::network::UdpSocketExt;
+
 pub(super) struct AudioStream {
     socket: UdpSocket,
 
-    bytes: Vec<u8>,
-    received_audio: VecDeque<EncodedAudioBuffer>,
+    received_audio: VecDeque<MuxedAudioBuffer>,
 }
 
 impl AudioStream {
@@ -20,12 +21,10 @@ impl AudioStream {
         Ok(Self {
             socket,
 
-            bytes: vec![0; 65536],
             received_audio: VecDeque::new(),
         })
     }
 
-    #[allow(dead_code)]
     pub(super) fn socket(&self) -> &UdpSocket {
         &self.socket
     }
@@ -35,14 +34,14 @@ impl AudioStream {
     }
 
     pub(super) fn recv_to_buf(&mut self) {
-        while let Ok(n) = self.socket.recv(&mut self.bytes) {
-            let encoded_audio = EncodedAudioBuffer(self.bytes[..n].to_vec());
+        while let Ok(packet) = self.socket.recv_packet() {
+            let muxed_audio = MuxedAudioBuffer(packet.into_bytes());
 
-            self.received_audio.push_back(encoded_audio);
+            self.received_audio.push_back(muxed_audio);
         }
     }
 
-    pub(super) fn pull(&mut self) -> Option<EncodedAudioBuffer> {
+    pub(super) fn pull(&mut self) -> Option<MuxedAudioBuffer> {
         self.received_audio.pop_front()
     }
 }

@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use mueue::{unidirectional_queue, Message, MessageEndpoint, MessageReceiver, MessageSender};
 
-use self::audio::EncodedAudioInfo;
+use self::pipeline::demuxer::AudioDemuxer;
 
 pub type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
@@ -54,6 +54,7 @@ impl AudioSystem {
 
         let sys_clock = Arc::new(SystemClock::new());
 
+        let demux = AudioDemuxer::new(notification_send.clone());
         let mut audio_decs = collect_audio_decs(audio_decs_builders, notification_send.clone());
         let sync = Synchronizer::new(notification_send.clone(), sys_clock);
         let resizer = AudioResizer::new(notification_send.clone());
@@ -61,6 +62,7 @@ impl AudioSystem {
             collect_virtual_microphones(virtual_mics_builders, notification_send);
 
         let mut pipeline = AudioPipeline::new();
+        pipeline.set_audio_demuxer(demux);
         pipeline.set_audio_decoder(take_first_audio_decoder(&mut audio_decs));
         pipeline.set_synchronizer(sync);
         pipeline.set_resizer(resizer);
@@ -107,7 +109,7 @@ impl AudioSystem {
         }
     }
 
-    pub fn set_audio_info(&mut self, info: EncodedAudioInfo) {
+    /* pub fn set_audio_info(&mut self, info: EncodedAudioInfo) {
         self.provide_audio_info_to_decoders(info);
         self.provide_sample_rate_to_microphones(info.sample_rate);
     }
@@ -140,7 +142,7 @@ impl AudioSystem {
             .for_each(|mic| {
                 mic.set_sample_rate(rate);
             });
-    }
+    } */
 }
 
 fn collect_audio_decs(
