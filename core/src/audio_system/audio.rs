@@ -148,7 +148,11 @@ pub struct RawAudioBuffer {
 
 impl RawAudioBuffer {
     pub const fn new(data: Vec<u8>, format: RawAudioFormat, sample_rate: u32) -> Self {
-        Self { data, format, sample_rate }
+        Self {
+            data,
+            format,
+            sample_rate,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -182,6 +186,20 @@ impl RawAudioBuffer {
     pub fn no_samples(&self) -> usize {
         self.as_slice().len() / self.format().no_bytes()
     }
+
+    pub fn duration(&self) -> ClockTime {
+        let duration_nanos = self.no_samples() as u64 * ClockTime::NANOS_IN_SEC
+            / self.sample_rate() as u64;
+        
+        ClockTime::from_nanos(duration_nanos)
+    }
+
+    pub fn sample_duration(&self) -> ClockTime {
+        let duration = self.duration();
+        let no_samples = self.no_samples() as u64;
+
+        duration / no_samples
+    }
 }
 
 impl Message for RawAudioBuffer {}
@@ -191,17 +209,15 @@ pub struct TimestampedRawAudioBuffer {
     raw: RawAudioBuffer,
 
     start: Option<ClockTime>,
-    duration: ClockTime,
 }
 
 impl TimestampedRawAudioBuffer {
     pub const NULL: Self = Self::null();
 
-    pub const fn new(raw: RawAudioBuffer, start: Option<ClockTime>, duration: ClockTime) -> Self {
+    pub const fn new(raw: RawAudioBuffer, start: Option<ClockTime>) -> Self {
         Self {
             raw,
             start,
-            duration,
         }
     }
 
@@ -209,7 +225,6 @@ impl TimestampedRawAudioBuffer {
         Self {
             raw: RawAudioBuffer::new(Vec::new(), RawAudioFormat::Unspecified, 0),
             start: None,
-            duration: ClockTime::ZERO,
         }
     }
 
@@ -230,18 +245,15 @@ impl TimestampedRawAudioBuffer {
     }
 
     pub fn stop(&self) -> Option<ClockTime> {
-        self.start.map(|start| start + self.duration)
+        self.start.map(|start| start + self.duration())
     }
 
     pub fn duration(&self) -> ClockTime {
-        self.duration
+        self.raw.duration()
     }
 
     pub fn sample_duration(&self) -> ClockTime {
-        let duration = self.duration();
-        let no_samples = self.raw.no_samples() as u64;
-
-        duration / no_samples
+        self.raw.sample_duration()
     }
 }
 

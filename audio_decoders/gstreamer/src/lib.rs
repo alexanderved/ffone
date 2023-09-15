@@ -2,8 +2,10 @@ mod gst_context;
 
 use gst_context::GstContext;
 
-use core::audio_system::audio::{EncodedAudioBuffer, TimestampedRawAudioBuffer, EncodedAudioHeader};
-use core::audio_system::element::{AudioSource, AudioSystemElementMessage, AudioSink, AudioFilter};
+use core::audio_system::audio::{
+    EncodedAudioBuffer, EncodedAudioHeader, TimestampedRawAudioBuffer,
+};
+use core::audio_system::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
 use core::audio_system::pipeline::audio_decoder::{AudioDecoder, AudioDecoderInfo};
 use core::error;
 use core::mueue::*;

@@ -18,7 +18,7 @@ fn test_decode_opus() {
     for data in opus_buffers {
         let encoded_audio = EncodedAudioBuffer {
             header,
-            start_ts: ClockTime::from_nanos(0),
+            start_ts: ClockTime::from_secs(10),
             data,
         };
         ctx.push(encoded_audio);
@@ -32,7 +32,7 @@ fn test_decode_opus() {
         }
 
         let Some(audio) = ctx.pull() else { continue };
-        
+
         decoded_audio.extend_from_slice(audio.as_slice());
     }
 

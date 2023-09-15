@@ -2,9 +2,8 @@
 mod tests;
 
 use core::audio_system::audio::{
-    AudioCodec, /* AudioFormat, */ EncodedAudioBuffer,
-    RawAudioBuffer, RawAudioFormat,
-    TimestampedRawAudioBuffer, EncodedAudioHeader,
+    AudioCodec, EncodedAudioBuffer, EncodedAudioHeader, RawAudioBuffer,
+    RawAudioFormat, TimestampedRawAudioBuffer,
 };
 use core::util::ClockTime;
 
@@ -54,12 +53,7 @@ impl GstContext {
         sink.set_sync(false);
 
         pipeline
-            .add_many(&[
-                src.upcast_ref(),
-                &parser,
-                &decoder,
-                sink.upcast_ref(),
-            ])
+            .add_many(&[src.upcast_ref(), &parser, &decoder, sink.upcast_ref()])
             .unwrap();
         gst::Element::link_many(&[
             src.upcast_ref(),
@@ -84,7 +78,14 @@ impl GstContext {
     }
 
     pub(super) fn push(&self, buffer: EncodedAudioBuffer) {
-        let gst_buffer = gst::Buffer::from_slice(buffer.data);
+        let mut gst_buffer = gst::Buffer::from_slice(buffer.data);
+
+        if let Some(gst_buffer) = gst_buffer.get_mut() {
+            let ts = gst::ClockTime::from_nseconds(buffer.start_ts.as_nanos());
+
+            gst_buffer.set_dts(ts);
+            gst_buffer.set_pts(ts);
+        }
 
         let _ = self.src.push_buffer(gst_buffer);
     }
@@ -95,9 +96,9 @@ impl GstContext {
             .try_pull_sample(Some(gst::ClockTime::from_mseconds(1)))?;
 
         let raw = raw_audio_buffer_from_sample(&sample, self.audio_info)?;
-        let (start, dur) = timestamps_from_sample(&sample, &raw, self.audio_info);
+        let start = timestamps_from_sample(&sample);
 
-        Some(TimestampedRawAudioBuffer::new(raw, start, dur))
+        Some(TimestampedRawAudioBuffer::new(raw, start))
     }
 
     pub(super) fn push_eos(&self) {
@@ -180,40 +181,21 @@ fn raw_audio_buffer_from_sample(
     Some(RawAudioBuffer::new(data, format, audio_info.sample_rate))
 }
 
-fn timestamps_from_sample(
-    sample: &gst::Sample,
-    raw_audio_buffer: &RawAudioBuffer,
-    audio_info: EncodedAudioHeader,
-) -> (Option<ClockTime>, ClockTime) {
-    let raw_audio_duration = ClockTime::from_nanos(
-        raw_audio_buffer.no_samples() as u64 * ClockTime::NANOS_IN_SEC
-            / audio_info.sample_rate as u64,
-    );
-
+fn timestamps_from_sample(sample: &gst::Sample) -> Option<ClockTime> {
     let Some(buffer) = sample.buffer() else {
-        return (None, raw_audio_duration);
+        return None;
     };
-
-    let buf_dur = buffer
-        .duration()
-        .unwrap_or(gst::ClockTime::from_nseconds(raw_audio_duration.as_nanos()));
-
     let Some(mut buf_start) = buffer.dts_or_pts() else {
-        return (None, to_custom_clock_time(buf_dur));
+        return None;
     };
-    let mut buf_stop = buf_start + buf_dur;
-
     let Some(segment) = sample.segment() else {
-        return (Some(to_custom_clock_time(buf_start)), to_custom_clock_time(buf_dur));
+        return Some(to_custom_clock_time(buf_start));
     };
 
     buf_start = to_running_time(segment, buf_start);
-    buf_stop = to_running_time(segment, buf_stop);
-
     let start_ts = to_custom_clock_time(buf_start);
-    let stop_ts = to_custom_clock_time(buf_stop);
 
-    (Some(start_ts), stop_ts - start_ts)
+    Some(start_ts)
 }
 
 fn to_custom_clock_time(ts: gst::ClockTime) -> ClockTime {
