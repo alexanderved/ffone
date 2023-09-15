@@ -1,5 +1,3 @@
-use crate::util::vec_truncate_front;
-
 use super::audio::{RawAudioBuffer, RawAudioFormat};
 
 use std::collections::VecDeque;
@@ -18,7 +16,11 @@ impl RawAudioQueue {
     }
 
     pub fn front_buffer_format(&self) -> Option<RawAudioFormat> {
-        self.buffers.front().map(|buf| buf.format())
+        self.buffers.front().map(RawAudioBuffer::format)
+    }
+
+    pub fn front_buffer_sample_rate(&self) -> Option<u32> {
+        self.buffers.front().map(RawAudioBuffer::sample_rate)
     }
 
     pub fn has_buffers(&self) -> bool {
@@ -33,31 +35,7 @@ impl RawAudioQueue {
         self.buffers.push_back(buffer);
     }
 
-    pub fn pop_buffer(&mut self) -> Option<RawAudioBuffer> {
-        let mut buf = self.buffers.pop_front();
-
-        let offset = self.front_buffer_offset;
-        self.front_buffer_offset = 0;
-
-        if let Some(buf) = buf.as_mut() {
-            vec_truncate_front(buf.as_vec_mut(), offset);
-        }
-
-        buf
-    }
-
-    pub fn pop_buffer_formatted(&mut self, format: RawAudioFormat) -> Option<RawAudioBuffer> {
-        if self
-            .front_buffer_format()
-            .is_some_and(|buf_format| buf_format == format)
-        {
-            return self.pop_buffer();
-        }
-
-        None
-    }
-
-    pub fn pop_bytes(&mut self, desired: usize) -> Option<(Vec<u8>, RawAudioFormat)> {
+    pub fn pop_bytes(&mut self, desired: usize) -> Option<(Vec<u8>, RawAudioFormat, u32)> {
         let res = self.buffers.front().map(|front_buffer| {
             let available = front_buffer.len() - self.front_buffer_offset;
 
@@ -68,6 +46,7 @@ impl RawAudioQueue {
             (
                 front_buffer.as_slice()[start..end].to_vec(),
                 front_buffer.format(),
+                front_buffer.sample_rate(),
             )
         });
 
@@ -83,16 +62,21 @@ impl RawAudioQueue {
         res
     }
 
-    pub fn pop_bytes_formatted(
+    pub fn pop_bytes_with_props(
         &mut self,
         desired: usize,
         format: RawAudioFormat,
+        sample_rate: u32,
     ) -> Option<Vec<u8>> {
-        if self
-            .front_buffer_format()
-            .is_some_and(|buf_format| buf_format == format)
-        {
-            return self.pop_bytes(desired).map(|(bytes, _)| bytes);
+        let Some(front_buffer_format) = self.front_buffer_format() else {
+            return None;
+        };
+        let Some(front_buffer_sample_rate) = self.front_buffer_sample_rate() else {
+            return None;
+        };
+
+        if front_buffer_format == format && front_buffer_sample_rate == sample_rate {
+            return self.pop_bytes(desired).map(|(bytes, _, _)| bytes);
         }
 
         None

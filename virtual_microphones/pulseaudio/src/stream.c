@@ -35,13 +35,6 @@ struct Stream {
     RawAudioFormat format;
 };
 
-
-
-pa_stream *stream_get_pa_stream(Stream *s) {
-    return s->stream;
-}
-
-
 Stream *stream_new(
     ffone_rc_ptr(PAContext) pa_ctx,
     ffone_rc_ptr(VirtualSink) sink,
@@ -155,7 +148,7 @@ static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) 
     };
     pa_stream_flags_t flags = PA_STREAM_INTERPOLATE_TIMING | 
         PA_STREAM_NOT_MONOTONIC | PA_STREAM_AUTO_TIMING_UPDATE |
-        PA_STREAM_ADJUST_LATENCY;// | PA_STREAM_VARIABLE_RATE;
+        PA_STREAM_ADJUST_LATENCY | PA_STREAM_VARIABLE_RATE;
 
     FFONE_RETURN_VAL_ON_FAILURE(
         (ret = pa_stream_connect_playback(stream, 
@@ -226,9 +219,13 @@ static pa_sample_format_t raw_audio_format_to_pa_sample_format_t(RawAudioFormat 
     }
 }
 
-void stream_set_sample_rate(Stream *stream, uint32_t sample_rate) {
+void stream_update_sample_rate(Stream *stream, uint32_t sample_rate) {
     FFONE_RETURN_ON_FAILURE(stream);
     FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
+
+    if (stream->sample_rate == sample_rate) {
+        return;
+    }
 
     stream_drain(stream);
 
@@ -241,17 +238,66 @@ void stream_set_sample_rate(Stream *stream, uint32_t sample_rate) {
     );
     FFONE_RETURN_ON_FAILURE(o);
 
-    if (pa_ctx_execute_operation(stream->pa_ctx, o) == 0) {
+    if (pa_ctx_execute_operation(stream->pa_ctx, o) == FFONE_SUCCESS) {
         printf("Stream Setting Sample Rate: %d\n", success);
+
+        if (success) {
+            stream->sample_rate = sample_rate;
+        }
     }
+}
+
+void stream_update_raw_audio_format(Stream *stream, RawAudioFormat format) {
+    FFONE_RETURN_ON_FAILURE(stream);
+    FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
+
+    if (stream->format == format) {
+        return;
+    }
+
+    stream->format = format;
+    stream_update_pa_stream(stream);
+}
+
+void stream_update_props(
+    Stream *stream,
+    uint32_t sample_rate,
+    RawAudioFormat format
+) {
+    FFONE_RETURN_ON_FAILURE(stream);
+    FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
+
+    if (stream->sample_rate == sample_rate && stream->format == format) {
+        return;
+    }
+
+    if (stream->sample_rate != sample_rate && stream->format == format) {
+        stream_update_sample_rate(stream, sample_rate);
+
+        return;
+    }
+
+    stream->sample_rate = sample_rate;
+    stream_update_raw_audio_format(stream, format);
 }
 
 void stream_update(Stream *stream) {
     FFONE_RETURN_ON_FAILURE(stream);
 
-    if (!stream->stream || stream->flags & FFONE_STREAM_FLAG_OUTDATED_AUDIO_FORMAT) {
-        stream_update_pa_stream(stream);
-        stream->flags &= ~FFONE_STREAM_FLAG_OUTDATED_AUDIO_FORMAT;
+    if (!stream->stream || stream->flags & FFONE_STREAM_FLAG_OUTDATED_PROPS) {
+        ffone_rc_ptr(RawAudioQueue) queue = pa_ctx_get_queue(stream->pa_ctx);
+        bool can_update = true;
+
+        RawAudioFormat new_format;
+        can_update &= ffone_raw_audio_queue_front_buffer_format(queue, &new_format);
+
+        uint32_t new_sample_rate;
+        can_update &= ffone_raw_audio_queue_front_buffer_sample_rate(queue, &new_sample_rate);
+
+        if (can_update) {
+            stream_update_props(stream, new_sample_rate, new_format);
+            stream->flags &= ~FFONE_STREAM_FLAG_OUTDATED_PROPS;
+        }
     }
 
     stream_try_write(stream);
@@ -281,25 +327,19 @@ static void stream_try_write(Stream *stream) {
 
     while (write_buffer_cursor < write_buffer_end && ffone_raw_audio_queue_has_bytes(queue)) {
         size_t read_size = write_buffer_end - write_buffer_cursor;
-        bool have_same_format = false;
-        ffone_raw_audio_queue_read_bytes_formatted(
+        bool have_same_props = false;
+        ffone_raw_audio_queue_read_bytes_with_props(
             queue,
             write_buffer_cursor,
             &read_size,
             stream->format,
-            &have_same_format
+            stream->sample_rate,
+            &have_same_props
         );
 
         if (read_size == 0) {
-            if (!have_same_format) {
-                // printf("\tOUTDATED AUDIO FORMAT DETECTED: %d\n", stream->format);
-
-                stream->flags |= FFONE_STREAM_FLAG_OUTDATED_AUDIO_FORMAT;
-
-                RawAudioFormat format;
-                if (ffone_raw_audio_queue_front_buffer_format(queue, &format)) {
-                    stream->format = format;
-                }
+            if (!have_same_props) {
+                stream->flags |= FFONE_STREAM_FLAG_OUTDATED_PROPS;
             }
 
             break;

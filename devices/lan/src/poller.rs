@@ -69,8 +69,7 @@ impl Poller {
     ) -> error::Result<()> {
         let _ = message_stream.send_from_buf();
 
-        self.poll
-            .poll(&mut self.events, Some(Duration::ZERO))?;
+        self.poll.poll(&mut self.events, Some(Duration::ZERO))?;
         for e in self.events.iter() {
             match e.token() {
                 MESSAGE => {

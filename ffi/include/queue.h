@@ -16,21 +16,19 @@ bool ffone_raw_audio_queue_has_buffers(RawAudioQueue *queue);
 
 bool ffone_raw_audio_queue_front_buffer_format(RawAudioQueue *queue, RawAudioFormat *format);
 
-RawAudioBuffer *ffone_raw_audio_queue_pop_buffer(RawAudioQueue *queue);
-
-RawAudioBuffer *ffone_raw_audio_queue_pop_buffer_formatted(RawAudioQueue *queue,
-                                                           RawAudioFormat format,
-                                                           bool *have_same_format);
+bool ffone_raw_audio_queue_front_buffer_sample_rate(RawAudioQueue *queue, uint32_t *sample_rate);
 
 void ffone_raw_audio_queue_read_bytes(RawAudioQueue *queue,
                                       uint8_t *bytes,
                                       size_t *nbytes,
-                                      RawAudioFormat *format);
+                                      RawAudioFormat *format,
+                                      uint32_t *sample_rate);
 
-void ffone_raw_audio_queue_read_bytes_formatted(RawAudioQueue *queue,
-                                                uint8_t *bytes,
-                                                size_t *nbytes,
-                                                RawAudioFormat format,
-                                                bool *have_same_format);
+void ffone_raw_audio_queue_read_bytes_with_props(RawAudioQueue *queue,
+                                                 uint8_t *bytes,
+                                                 size_t *nbytes,
+                                                 RawAudioFormat format,
+                                                 uint32_t sample_rate,
+                                                 bool *have_same_props);
 
 #endif /* _FFONE_QUEUE_H */

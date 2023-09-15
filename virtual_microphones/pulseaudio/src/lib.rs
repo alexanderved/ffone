@@ -41,7 +41,7 @@ impl AudioSink<RawAudioBuffer> for PAVirtualMicrophone {
     fn input(&self) -> Option<MessageReceiver<RawAudioBuffer>> {
         self.input.clone()
     }
-    
+
     fn set_input(&mut self, input: MessageReceiver<RawAudioBuffer>) {
         self.input = Some(input);
     }

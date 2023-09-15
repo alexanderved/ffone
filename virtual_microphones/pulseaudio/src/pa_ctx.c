@@ -262,21 +262,6 @@ void cmain(RawAudioQueue *queue) {
         //while (1) {
             pa_ctx_update(pa_ctx, 0);
 
-            pa_usec_t usec = 0;
-            if (pa_stream_get_time(stream_get_pa_stream(pa_ctx->stream), &usec) == 0) {
-                printf("\tAudio Stream Time: %" PRIu64 "ms\n", usec / 1000);
-            }
-            
-            const pa_timing_info *ti = pa_stream_get_timing_info(
-                stream_get_pa_stream(pa_ctx->stream));
-            
-            if (ti) {
-                printf("\twrite index: %" PRIi64 "\n", ti->write_index);
-                printf("\tread index: %" PRIi64 "\n\n", ti->read_index);
-            }
-
-
-
             if (!ffone_raw_audio_queue_has_bytes(queue)) {
                 break;
             }
@@ -284,31 +269,6 @@ void cmain(RawAudioQueue *queue) {
             usleep(100000);
         }
     }
-
-    /* if (pa_ctx->stream) {
-        for (int i = 0; i < 1000000; ++i) {
-            pa_ctx_iterate(pa_ctx, 0);
-
-            pa_usec_t usec = 0;
-            if (pa_stream_get_time(stream_get_pa_stream(pa_ctx->stream), &usec) == 0) {
-                printf("\tAudio Stream Time: %" PRIu64 "ms\n", usec / 1000);
-            }
-
-            const pa_timing_info *ti = pa_stream_get_timing_info(
-                stream_get_pa_stream(pa_ctx->stream));
-            
-            if (ti) {
-                printf("\twrite index: %" PRIi64 "\n", ti->write_index);
-                printf("\tread index: %" PRIi64 "\n\n", ti->read_index);
-
-                if (ti->write_index > 0 && ti->read_index > 0
-                    && ti->write_index == ti->read_index)
-                {
-                    break;
-                }
-            }
-        }
-    } */
 
     ffone_rc_unref(queue);
     ffone_rc_unref(pa_ctx);

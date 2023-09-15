@@ -16,7 +16,7 @@ typedef uint32_t StreamFlags;
 #define FFONE_STREAM_FLAG_NONE 0
 #define FFONE_STREAM_FLAG_CREATED 1U << 0
 #define FFONE_STREAM_FLAG_CONNECTED 1U << 1
-#define FFONE_STREAM_FLAG_OUTDATED_AUDIO_FORMAT 1U << 2
+#define FFONE_STREAM_FLAG_OUTDATED_PROPS 1U << 2
 
 typedef struct Stream Stream;
 
@@ -30,8 +30,5 @@ Stream *stream_new(
 void stream_update(Stream *stream);
 
 uint64_t stream_get_time(Stream *stream);
-
-
-pa_stream *stream_get_pa_stream(Stream *s);
 
 #endif /* _FFONE_STREAM_H */
