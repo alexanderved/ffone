@@ -9,24 +9,24 @@
 static void stream_dtor(void *opaque);
 
 static pa_stream *new_pa_stream(
-    ffone_rc_ptr(PAContext) pa_ctx,
+    ffone_rc_ptr(FFonePAContext) pa_ctx,
     uint32_t sample_rate,
     RawAudioFormat format
 );
-static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx);
+static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(FFonePAContext) pa_ctx);
 
 static pa_sample_format_t raw_audio_format_to_pa_sample_format_t(RawAudioFormat raw);
 
-static void stream_update_pa_stream(Stream *stream);
+static void ffone_pa_stream_update_pa_stream(ffone_rc_ptr(FFonePAStream) stream);
 
-static void stream_try_write(Stream *stream);
-static void stream_drain(Stream *stream);
+static void ffone_pa_stream_try_write(ffone_rc_ptr(FFonePAStream) stream);
+static void ffone_pa_stream_drain(ffone_rc_ptr(FFonePAStream) stream);
 
-static void stream_success_cb(pa_stream *p, int success, void *userdata);
+static void ffone_pa_stream_success_cb(pa_stream *p, int success, void *userdata);
 
-struct Stream {
-    ffone_weak(PAContext) pa_ctx;
-    ffone_rc(VirtualSink) sink;
+struct FFonePAStream {
+    ffone_weak(FFonePAContext) pa_ctx;
+    ffone_rc(FFonePAVirtualSink) sink;
 
     pa_stream *stream;
     StreamFlags flags;
@@ -35,15 +35,15 @@ struct Stream {
     RawAudioFormat format;
 };
 
-Stream *stream_new(
-    ffone_rc_ptr(PAContext) pa_ctx,
-    ffone_rc_ptr(VirtualSink) sink,
+ffone_rc(FFonePAStream) ffone_pa_stream_new(
+    ffone_rc_ptr(FFonePAContext) pa_ctx,
+    ffone_rc_ptr(FFonePAVirtualSink) sink,
     uint32_t sample_rate,
     RawAudioFormat format
 ) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx && sink, NULL);
 
-    Stream *stream = ffone_rc_new0(Stream);
+    ffone_rc(FFonePAStream) stream = ffone_rc_new0(FFonePAStream);
     FFONE_RETURN_VAL_ON_FAILURE(stream, NULL);
 
     FFONE_GOTO_ON_FAILURE(stream->pa_ctx = ffone_rc_ref_weak(pa_ctx), error);
@@ -85,13 +85,13 @@ error:
 }
 
 static void stream_dtor(void *opaque) {
-    Stream *stream = opaque;
+    FFonePAStream *stream = opaque;
     FFONE_RETURN_ON_FAILURE(stream);
 
     stream->flags = FFONE_STREAM_FLAG_NONE;
 
     if (stream->stream) {
-        stream_drain(stream);
+        ffone_pa_stream_drain(stream);
         if (pa_stream_get_state(stream->stream) == PA_STREAM_READY) {
             pa_stream_disconnect(stream->stream);
         }
@@ -108,11 +108,11 @@ static void stream_dtor(void *opaque) {
 }
 
 static pa_stream *new_pa_stream(
-    ffone_rc_ptr(PAContext) pa_ctx,
+    ffone_rc_ptr(FFonePAContext) pa_ctx,
     uint32_t sample_rate,
     RawAudioFormat format
 ) {
-    pa_context *context = pa_ctx_get_context(pa_ctx);
+    pa_context *context = ffone_pa_ctx_get_context(pa_ctx);
     FFONE_RETURN_VAL_ON_FAILURE(context, NULL);
 
     const pa_sample_spec sample_spec = {
@@ -134,7 +134,7 @@ static pa_stream *new_pa_stream(
     return stream;
 }
 
-static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) {
+static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(FFonePAContext) pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(stream, FFONE_ERROR_INVALID_ARG);
 
     int ret;
@@ -158,7 +158,7 @@ static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) 
 
     pa_stream_state_t state = PA_STREAM_UNCONNECTED;
     while (state != PA_STREAM_READY) {
-        pa_ctx_iterate(pa_ctx, 1);
+        ffone_pa_ctx_iterate(pa_ctx, 1);
 
         state = pa_stream_get_state(stream);
         if (state == PA_STREAM_FAILED || state == PA_STREAM_TERMINATED) {
@@ -169,12 +169,12 @@ static int connect_pa_stream(pa_stream *stream, ffone_rc_ptr(PAContext) pa_ctx) 
     return FFONE_SUCCESS;
 }
 
-static void stream_update_pa_stream(Stream *stream) {
+static void ffone_pa_stream_update_pa_stream(ffone_rc_ptr(FFonePAStream) stream) {
     FFONE_RETURN_ON_FAILURE(stream);
     FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream));
 
     if (stream->stream) {
-        stream_drain(stream);
+        ffone_pa_stream_drain(stream);
         if (pa_stream_get_state(stream->stream) == PA_STREAM_READY) {
             pa_stream_disconnect(stream->stream);
         }
@@ -219,7 +219,10 @@ static pa_sample_format_t raw_audio_format_to_pa_sample_format_t(RawAudioFormat 
     }
 }
 
-void stream_update_sample_rate(Stream *stream, uint32_t sample_rate) {
+static void ffone_pa_stream_update_sample_rate(
+    ffone_rc_ptr(FFonePAStream) stream,
+    uint32_t sample_rate
+) {
     FFONE_RETURN_ON_FAILURE(stream);
     FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
@@ -227,18 +230,18 @@ void stream_update_sample_rate(Stream *stream, uint32_t sample_rate) {
         return;
     }
 
-    stream_drain(stream);
+    ffone_pa_stream_drain(stream);
 
     int success = -1;
     pa_operation *o = pa_stream_update_sample_rate(
         stream->stream,
         sample_rate,
-        stream_success_cb,
+        ffone_pa_stream_success_cb,
         &success
     );
     FFONE_RETURN_ON_FAILURE(o);
 
-    if (pa_ctx_execute_operation(stream->pa_ctx, o) == FFONE_SUCCESS) {
+    if (ffone_pa_ctx_execute_operation(stream->pa_ctx, o) == FFONE_SUCCESS) {
         printf("Stream Setting Sample Rate: %d\n", success);
 
         if (success) {
@@ -247,7 +250,10 @@ void stream_update_sample_rate(Stream *stream, uint32_t sample_rate) {
     }
 }
 
-void stream_update_raw_audio_format(Stream *stream, RawAudioFormat format) {
+static void ffone_pa_stream_update_raw_audio_format(
+    ffone_rc_ptr(FFonePAStream) stream,
+    RawAudioFormat format
+) {
     FFONE_RETURN_ON_FAILURE(stream);
     FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
@@ -256,11 +262,11 @@ void stream_update_raw_audio_format(Stream *stream, RawAudioFormat format) {
     }
 
     stream->format = format;
-    stream_update_pa_stream(stream);
+    ffone_pa_stream_update_pa_stream(stream);
 }
 
-void stream_update_props(
-    Stream *stream,
+static void ffone_pa_stream_update_props(
+    ffone_rc_ptr(FFonePAStream) stream,
     uint32_t sample_rate,
     RawAudioFormat format
 ) {
@@ -272,20 +278,20 @@ void stream_update_props(
     }
 
     if (stream->sample_rate != sample_rate && stream->format == format) {
-        stream_update_sample_rate(stream, sample_rate);
+        ffone_pa_stream_update_sample_rate(stream, sample_rate);
 
         return;
     }
 
     stream->sample_rate = sample_rate;
-    stream_update_raw_audio_format(stream, format);
+    ffone_pa_stream_update_raw_audio_format(stream, format);
 }
 
-void stream_update(Stream *stream) {
+void ffone_pa_stream_update(ffone_rc_ptr(FFonePAStream) stream) {
     FFONE_RETURN_ON_FAILURE(stream);
 
     if (!stream->stream || stream->flags & FFONE_STREAM_FLAG_OUTDATED_PROPS) {
-        ffone_rc_ptr(RawAudioQueue) queue = pa_ctx_get_queue(stream->pa_ctx);
+        ffone_rc_ptr(RawAudioQueue) queue = ffone_pa_ctx_get_queue(stream->pa_ctx);
         bool can_update = true;
 
         RawAudioFormat new_format;
@@ -295,19 +301,19 @@ void stream_update(Stream *stream) {
         can_update &= ffone_raw_audio_queue_front_buffer_sample_rate(queue, &new_sample_rate);
 
         if (can_update) {
-            stream_update_props(stream, new_sample_rate, new_format);
+            ffone_pa_stream_update_props(stream, new_sample_rate, new_format);
             stream->flags &= ~FFONE_STREAM_FLAG_OUTDATED_PROPS;
         }
     }
 
-    stream_try_write(stream);
+    ffone_pa_stream_try_write(stream);
 }
 
-static void stream_try_write(Stream *stream) {
+static void ffone_pa_stream_try_write(ffone_rc_ptr(FFonePAStream) stream) {
     FFONE_RETURN_ON_FAILURE(stream);
     FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
-    RawAudioQueue *queue = pa_ctx_get_queue(stream->pa_ctx);
+    RawAudioQueue *queue = ffone_pa_ctx_get_queue(stream->pa_ctx);
     FFONE_RETURN_ON_FAILURE(queue);
 
     size_t write_buffer_size = pa_stream_writable_size(stream->stream);
@@ -367,20 +373,20 @@ static void stream_try_write(Stream *stream) {
     );
 }
 
-static void stream_drain(Stream *stream) {
+static void ffone_pa_stream_drain(ffone_rc_ptr(FFonePAStream) stream) {
     FFONE_RETURN_ON_FAILURE(stream);
     FFONE_RETURN_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream);
 
     int success = -1;
-    pa_operation *o = pa_stream_drain(stream->stream, stream_success_cb, &success);
+    pa_operation *o = pa_stream_drain(stream->stream, ffone_pa_stream_success_cb, &success);
     FFONE_RETURN_ON_FAILURE(o);
 
-    if (pa_ctx_execute_operation(stream->pa_ctx, o) == 0) {
+    if (ffone_pa_ctx_execute_operation(stream->pa_ctx, o) == 0) {
         printf("Stream Drained: %d\n", success);
     }
 }
 
-static void stream_success_cb(pa_stream *p, int success, void *userdata) {
+static void ffone_pa_stream_success_cb(pa_stream *p, int success, void *userdata) {
     int *success_ret = userdata;
     FFONE_RETURN_ON_FAILURE(success_ret);
 
@@ -389,7 +395,7 @@ static void stream_success_cb(pa_stream *p, int success, void *userdata) {
     (void)p;
 }
 
-uint64_t stream_get_time(Stream *stream) {
+uint64_t ffone_pa_stream_get_time(ffone_rc_ptr(FFonePAStream) stream) {
     FFONE_RETURN_VAL_ON_FAILURE(stream, 0);
     FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(stream) && stream->stream, 0);
 

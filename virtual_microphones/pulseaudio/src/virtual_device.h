@@ -8,27 +8,25 @@
 
 #include <pulse/pulseaudio.h>
 
-#define DEFAULT_SAMPLE_RATE 48000
-#define VIRTUAL_DEVICE_INDEX_NONE UINT32_MAX
+#define FFONE_PA_DEFAULT_SAMPLE_RATE 48000
+#define FFONE_PA_VIRTUAL_DEVICE_INDEX_NONE UINT32_MAX
 
-typedef struct PAContext PAContext;
+typedef struct FFonePAContext FFonePAContext;
 
-typedef struct VirtualDevice VirtualDevice;
-typedef struct VirtualSource VirtualSource;
-typedef struct VirtualSink VirtualSink;
+typedef struct FFonePAVirtualSource FFonePAVirtualSource;
+typedef struct FFonePAVirtualSink FFonePAVirtualSink;
 
-typedef uint32_t VirtualDeviceFlags;
+typedef uint32_t FFonePAVirtualDeviceFlags;
 
-#define VIRTUAL_DEVICE_FLAGS_NONE 0
-#define VIRTUAL_DEVICE_FLAGS_CREATED 1U << 0
-#define VIRTUAL_DEVICE_FLAGS_LOADED 1U << 1
+#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_NONE 0
+#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_CREATED 1U << 0
+#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_LOADED 1U << 1
 
-ffone_rc(VirtualSource) virtual_source_new(
-    ffone_rc_ptr(PAContext) pa_ctx,
-    ffone_rc_ptr(VirtualSink) master
+ffone_rc(FFonePAVirtualSource) ffone_pa_virtual_source_new(
+    ffone_rc_ptr(FFonePAContext) pa_ctx,
+    ffone_rc_ptr(FFonePAVirtualSink) master
 );
 
-ffone_rc(VirtualSink) virtual_sink_new(ffone_rc_ptr(PAContext) pa_ctx);
-const char *virtual_sink_get_name(ffone_rc_ptr(VirtualSink) sink);
+ffone_rc(FFonePAVirtualSink) ffone_pa_virtual_sink_new(ffone_rc_ptr(FFonePAContext) pa_ctx);
 
 #endif /* _FFONE_VIRTUAL_DEVICE_H */

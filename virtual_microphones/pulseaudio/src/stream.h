@@ -18,17 +18,17 @@ typedef uint32_t StreamFlags;
 #define FFONE_STREAM_FLAG_CONNECTED 1U << 1
 #define FFONE_STREAM_FLAG_OUTDATED_PROPS 1U << 2
 
-typedef struct Stream Stream;
+typedef struct FFonePAStream FFonePAStream;
 
-Stream *stream_new(
-    ffone_rc_ptr(PAContext) pa_ctx,
-    ffone_rc_ptr(VirtualSink) sink,
+ffone_rc(FFonePAStream) ffone_pa_stream_new(
+    ffone_rc_ptr(FFonePAContext) pa_ctx,
+    ffone_rc_ptr(FFonePAVirtualSink) sink,
     uint32_t sample_rate,
     RawAudioFormat format
 );
 
-void stream_update(Stream *stream);
+void ffone_pa_stream_update(ffone_rc_ptr(FFonePAStream) stream);
 
-uint64_t stream_get_time(Stream *stream);
+uint64_t ffone_pa_stream_get_time(ffone_rc_ptr(FFonePAStream) stream);
 
 #endif /* _FFONE_STREAM_H */
