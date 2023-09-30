@@ -33,7 +33,7 @@ impl AudioResizer {
 }
 
 impl Runnable for AudioResizer {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         let Some(input) = self.input.as_ref() else {
             return Ok(());
         };

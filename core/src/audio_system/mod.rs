@@ -209,7 +209,7 @@ impl Component for AudioSystem {
 }
 
 impl Runnable for AudioSystem {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         todo!()
     }
 

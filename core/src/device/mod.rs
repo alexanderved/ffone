@@ -78,7 +78,7 @@ impl Component for DeviceSystem {
 }
 
 impl Runnable for DeviceSystem {
-    fn update(&mut self, _flow: &mut ControlFlow) -> crate::error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> crate::error::Result<()> {
         Ok(())
     }
 }

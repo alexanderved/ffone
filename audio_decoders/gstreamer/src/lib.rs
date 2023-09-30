@@ -56,7 +56,7 @@ impl GstDecoder {
 }
 
 impl Runnable for GstDecoder {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         let Some(input) = self.input.clone() else {
             return Ok(());
         };

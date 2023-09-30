@@ -59,13 +59,15 @@ impl LanLink {
         })
     }
 
-    fn handle_ping(&mut self, flow: &mut ControlFlow) {
+    fn handle_ping(&mut self, flow: Option<&mut ControlFlow>) {
         if self.ping_timer.is_time_out() {
             self.ping();
         }
 
         if self.pong_timer.is_time_out() {
-            *flow = ControlFlow::Break;
+            if let Some(flow) = flow {
+                *flow = ControlFlow::Break;
+            }
         }
     }
 
@@ -111,7 +113,7 @@ impl Element for LanLink {
 }
 
 impl Runnable for LanLink {
-    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, flow: Option<&mut ControlFlow>) -> error::Result<()> {
         self.handle_ping(flow);
 
         self.poller

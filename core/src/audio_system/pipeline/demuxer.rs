@@ -51,7 +51,7 @@ impl AudioDemuxer {
 }
 
 impl Runnable for AudioDemuxer {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         self.drain();
 
         Ok(())

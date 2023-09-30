@@ -69,7 +69,7 @@ impl Element for LanDiscoverer {
 }
 
 impl Runnable for LanDiscoverer {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         let msg = self.discover_devices().map_or_else(
             DeviceSystemElementMessage::Error,
             DeviceSystemElementMessage::NewDevicesDiscovered,

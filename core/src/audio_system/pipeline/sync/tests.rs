@@ -53,7 +53,7 @@ fn test_buffer_early_arrival() {
         Some(ClockTime::ZERO),
     );
     let _ = in_send.send(first_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_some());
 
     let early_buf = TimestampedRawAudioBuffer::new(
@@ -66,11 +66,11 @@ fn test_buffer_early_arrival() {
     );
     sys_clock.move_forward(ClockTime::from_millis(500));
     let _ = in_send.send(early_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_none());
 
     sys_clock.move_forward(ClockTime::from_millis(500));
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_some());
 }
 
@@ -92,7 +92,7 @@ fn test_buffer_arrival_in_time() {
         Some(ClockTime::ZERO),
     );
     let _ = in_send.send(first_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_some());
 
     let in_time_buf = TimestampedRawAudioBuffer::new(
@@ -105,7 +105,7 @@ fn test_buffer_arrival_in_time() {
     );
     sys_clock.move_forward(ClockTime::from_secs(1));
     let _ = in_send.send(in_time_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_some());
 }
 
@@ -138,7 +138,7 @@ fn test_buffer_late_arrival() {
         Some(ClockTime::ZERO),
     );
     let _ = in_send.send(first_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_some());
 
     let late_buf = TimestampedRawAudioBuffer::new(
@@ -151,7 +151,7 @@ fn test_buffer_late_arrival() {
     );
     sys_clock.move_forward(ClockTime::from_secs(1) + DELAY);
     let _ = in_send.send(late_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert_eq!(out_recv.recv(), Some(reference_buffer));
 }
 
@@ -182,7 +182,7 @@ fn test_non_monotonous_timestamp() {
         Some(ClockTime::ZERO),
     );
     let _ = in_send.send(first_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_some());
 
     let non_mono_buf = TimestampedRawAudioBuffer::new(
@@ -195,10 +195,10 @@ fn test_non_monotonous_timestamp() {
     );
     sys_clock.move_forward(ClockTime::from_millis(750));
     let _ = in_send.send(non_mono_buf);
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert!(out_recv.recv().is_none());
 
     sys_clock.move_forward(ClockTime::from_millis(250));
-    let _ = sync.update(&mut ControlFlow::Continue);
+    let _ = sync.update(None);
     assert_eq!(out_recv.recv(), Some(reference_buffer));
 }

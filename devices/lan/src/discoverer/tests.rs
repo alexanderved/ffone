@@ -33,9 +33,12 @@ impl FakeDevice {
 }
 
 impl Runnable for FakeDevice {
-    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, flow: Option<&mut ControlFlow>) -> error::Result<()> {
         if matches!(self.recv.recv(), Some(StopDevice)) {
-            *flow = ControlFlow::Break;
+            if let Some(flow) = flow {
+                *flow = ControlFlow::Break;
+            }
+            
             return Ok(());
         }
 

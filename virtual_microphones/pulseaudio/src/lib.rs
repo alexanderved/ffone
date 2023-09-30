@@ -20,7 +20,7 @@ pub struct PAVirtualMicrophone {
 }
 
 impl Runnable for PAVirtualMicrophone {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         todo!()
     }
 }

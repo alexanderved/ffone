@@ -10,7 +10,7 @@ pub enum ControlFlow {
 }
 
 pub trait Runnable: AsRunnable {
-    fn update(&mut self, control_flow: &mut ControlFlow) -> error::Result<()>;
+    fn update(&mut self, control_flow: Option<&mut ControlFlow>) -> error::Result<()>;
 
     fn on_start(&mut self) {}
 
@@ -23,7 +23,7 @@ pub trait Runnable: AsRunnable {
 }
 
 impl<T: Runnable + ?Sized> Runnable for &'_ mut T {
-    fn update(&mut self, control_flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, control_flow: Option<&mut ControlFlow>) -> error::Result<()> {
         (**self).update(control_flow)
     }
 
@@ -41,7 +41,7 @@ impl<T: Runnable + ?Sized> Runnable for &'_ mut T {
 }
 
 impl<T: Runnable + ?Sized> Runnable for Box<T> {
-    fn update(&mut self, control_flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, control_flow: Option<&mut ControlFlow>) -> error::Result<()> {
         (**self).update(control_flow)
     }
 
@@ -119,7 +119,7 @@ impl<R: Runnable> RunnableStateMachine<R> {
     pub fn proceed(&mut self) -> Option<error::Result<()>> {
         if let RunnableState::Running(ref mut control_flow) = self.state {
             if matches!(control_flow, ControlFlow::Continue) {
-                return Some(self.runnable.update(control_flow));
+                return Some(self.runnable.update(Some(control_flow)));
             }
         }
 

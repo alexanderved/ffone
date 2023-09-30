@@ -134,7 +134,7 @@ impl Synchronizer {
 }
 
 impl Runnable for Synchronizer {
-    fn update(&mut self, _flow: &mut ControlFlow) -> error::Result<()> {
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
         if let Some(virtual_mic_clock) = self.virtual_mic_clock.as_deref() {
             if self.virtual_mic_clock_update_timer.is_time_out() {
                 virtual_mic_clock.record_observation();

@@ -195,10 +195,10 @@ impl AudioPipeline {
 }
 
 impl Runnable for AudioPipeline {
-    fn update(&mut self, flow: &mut ControlFlow) -> error::Result<()> {
-        self.dec.as_mut().map(|dec| dec.update(&mut *flow));
-        self.sync.as_mut().map(|sync| sync.update(&mut *flow));
-        self.mic.as_mut().map(|mic| mic.update(&mut *flow));
+    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
+        self.dec.as_mut().map(|dec| dec.update(None));
+        self.sync.as_mut().map(|sync| sync.update(None));
+        self.mic.as_mut().map(|mic| mic.update(None));
 
         Ok(())
     }
