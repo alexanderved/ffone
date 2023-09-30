@@ -28,6 +28,13 @@ pub trait AudioSource<Out: Message>: AudioSystemElement + AsAudioSource<Out> {
     fn set_output(&mut self, output: MessageSender<Out>);
     fn unset_output(&mut self);
 
+    fn create_output(&mut self) -> MessageReceiver<Out> {
+        let (send, recv) = unidirectional_queue();
+        self.set_output(send);
+
+        recv
+    }
+
     fn chain(&mut self, sink: &mut dyn AudioSink<Out>) {
         let (output, input) = unidirectional_queue();
 
@@ -42,6 +49,13 @@ pub trait AudioSink<In: Message>: AudioSystemElement + AsAudioSink<In> {
     fn input(&self) -> Option<MessageReceiver<In>>;
     fn set_input(&mut self, input: MessageReceiver<In>);
     fn unset_input(&mut self);
+
+    fn create_input(&mut self) -> MessageSender<In> {
+        let (send, recv) = unidirectional_queue();
+        self.set_input(recv);
+
+        send
+    }
 }
 
 impl_as_trait!(audio_sink -> AudioSink<In: Message>);

@@ -80,11 +80,15 @@ impl ClockTime {
         let master_time_mean = calibration_info.observation_mean.master_time;
         let slave_time_mean = calibration_info.observation_mean.slave_time;
 
-        println!("SLOPE: {}", slope_num as f64 / slope_denom as f64);
-        println!("MASTER TIME MEAN: {:?}", master_time_mean);
-        println!("SLAVE TIME MEAN: {:?}", slave_time_mean);
-
         (*self - master_time_mean) * slope_denom / slope_num + slave_time_mean
+    }
+
+    pub fn saturating_sub(self, rhs: Self) -> Self {
+        if rhs > self {
+            return Self::ZERO;
+        }
+
+        self - rhs
     }
 }
 

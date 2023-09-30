@@ -20,9 +20,7 @@ use self::pipeline::demuxer::AudioDemuxer;
 pub type AudioSystemEndpoint = MessageEndpoint<AudioSystemControlMessage, AudioSystemMessage>;
 
 #[non_exhaustive]
-pub enum AudioSystemMessage {
-    RestartAudioStream,
-}
+pub enum AudioSystemMessage {}
 
 impl Message for AudioSystemMessage {}
 
@@ -86,16 +84,8 @@ impl AudioSystem {
 
         let dec = self.audio_decs.get_mut(&info).and_then(Option::take);
         if let Some(dec) = dec {
-            // The new audio decoder needs to receive useful information such as
-            // an audio format header which is sent at the beginning of the audio stream,
-            // so we have to ask for restarting it.
-            self.restart_audio_stream();
             self.pipeline.runnable_mut().set_audio_decoder(dec);
         }
-    }
-
-    fn restart_audio_stream(&mut self) {
-        self.send(AudioSystemMessage::RestartAudioStream);
     }
 
     pub fn choose_virtual_microphone(&mut self, info: VirtualMicrophoneInfo) {

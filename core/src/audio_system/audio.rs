@@ -188,9 +188,9 @@ impl RawAudioBuffer {
     }
 
     pub fn duration(&self) -> ClockTime {
-        let duration_nanos = self.no_samples() as u64 * ClockTime::NANOS_IN_SEC
-            / self.sample_rate() as u64;
-        
+        let duration_nanos =
+            self.no_samples() as u64 * ClockTime::NANOS_IN_SEC / self.sample_rate() as u64;
+
         ClockTime::from_nanos(duration_nanos)
     }
 
@@ -198,7 +198,27 @@ impl RawAudioBuffer {
         let duration = self.duration();
         let no_samples = self.no_samples() as u64;
 
+        if no_samples == 0 {
+            return ClockTime::ZERO;
+        }
+
         duration / no_samples
+    }
+
+    pub fn truncate_front(&mut self, no_samples: u64) {
+        let no_bytes = self.format().no_bytes();
+
+        vec_truncate_front(self.as_vec_mut(), no_samples as usize * no_bytes);
+    }
+
+    pub fn truncate_duration_front(&mut self, cut_dur: ClockTime) {
+        let no_bytes = self.format().no_bytes();
+        let sample_duration = self.sample_duration();
+
+        vec_truncate_front(
+            self.as_vec_mut(),
+            (cut_dur / sample_duration).as_nanos() as usize * no_bytes,
+        );
     }
 }
 
@@ -215,10 +235,7 @@ impl TimestampedRawAudioBuffer {
     pub const NULL: Self = Self::null();
 
     pub const fn new(raw: RawAudioBuffer, start: Option<ClockTime>) -> Self {
-        Self {
-            raw,
-            start,
-        }
+        Self { raw, start }
     }
 
     pub const fn null() -> Self {
@@ -255,10 +272,28 @@ impl TimestampedRawAudioBuffer {
     pub fn sample_duration(&self) -> ClockTime {
         self.raw.sample_duration()
     }
+
+    pub fn truncate_front(&mut self, no_samples: u64) {
+        let cut_dur = self.sample_duration() * no_samples;
+        if let Some(start) = self.start.as_mut() {
+            *start += cut_dur;
+        }
+
+        self.raw.truncate_front(no_samples);
+    }
+
+    pub fn truncate_duration_front(&mut self, cut_dur: ClockTime) {
+        if let Some(start) = self.start.as_mut() {
+            *start += cut_dur;
+        }
+
+        self.raw.truncate_duration_front(cut_dur);
+    }
 }
 
 impl Message for TimestampedRawAudioBuffer {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResizableRawAudioBuffer {
     raw: RawAudioBuffer,
     desired_no_samples: usize,
