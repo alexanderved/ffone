@@ -1,11 +1,17 @@
-use ffi::audio_system::queue::RawAudioQueueRC;
-
 use core::audio_system::audio::RawAudioBuffer;
 use core::audio_system::audio::RawAudioFormat;
+use core::audio_system::element::AudioSink;
+use core::mueue::unidirectional_queue;
+use core::util::Runnable;
 use std::f64::consts::PI;
 
+use ffone_pa_virtual_microphone::PAVirtualMicrophone;
+
 fn main() {
-    let queue = RawAudioQueueRC::new().unwrap();
+    let (send, _) = unidirectional_queue();
+    let mut mic = PAVirtualMicrophone::new(send).unwrap();
+    let in_send = mic.create_input();
+    
     let mut accum: f64 = 0.0;
 
     for _ in 0..8 * 3 {
@@ -20,7 +26,7 @@ fn main() {
             data.push(wave);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8, 8000))
+        let _ = in_send.send(RawAudioBuffer::new(data, RawAudioFormat::U8, 8000));
     }
 
     for _ in 0..8 * 3 {
@@ -37,7 +43,7 @@ fn main() {
             data.extend(bytes);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::S16LE, 8000))
+        let _ = in_send.send(RawAudioBuffer::new(data, RawAudioFormat::S16LE, 8000));
     }
 
     for _ in 0..44 * 3 {
@@ -52,7 +58,7 @@ fn main() {
             data.push(wave);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8, 44100))
+        let _ = in_send.send(RawAudioBuffer::new(data, RawAudioFormat::U8, 44100));
     }
 
     for _ in 0..48 * 3 {
@@ -67,10 +73,14 @@ fn main() {
             data.push(wave);
         }
 
-        queue.push_buffer(RawAudioBuffer::new(data, RawAudioFormat::U8, 48000))
+        let _ = in_send.send(RawAudioBuffer::new(data, RawAudioFormat::U8, 48000));
     }
 
-    unsafe {
-        ffone_pa_virtual_microphone::cmain(queue.into_raw());
+    loop {
+        let _ = mic.update(None);
+
+        if !mic.queue.has_bytes() {
+            break;
+        }
     }
 }

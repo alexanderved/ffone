@@ -14,7 +14,6 @@ pub struct VirtualMicrophoneInfo {
 
 pub trait VirtualMicrophone: AudioSink<RawAudioBuffer> {
     fn info(&self) -> VirtualMicrophoneInfo;
-    fn set_sample_rate(&mut self, rate: u32);
 
     fn provide_clock(&self) -> Option<Rc<dyn SlaveClock>> {
         None

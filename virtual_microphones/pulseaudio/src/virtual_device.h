@@ -1,17 +1,17 @@
 #ifndef _FFONE_VIRTUAL_DEVICE_H
 #define _FFONE_VIRTUAL_DEVICE_H
 
-#include <stdint.h>
+#include "core.h"
 
 #include "audio.h"
 #include "rc.h"
+
+#include <stdint.h>
 
 #include <pulse/pulseaudio.h>
 
 #define FFONE_PA_DEFAULT_SAMPLE_RATE 48000
 #define FFONE_PA_VIRTUAL_DEVICE_INDEX_NONE UINT32_MAX
-
-typedef struct FFonePAContext FFonePAContext;
 
 typedef struct FFonePAVirtualSource FFonePAVirtualSource;
 typedef struct FFonePAVirtualSink FFonePAVirtualSink;
@@ -23,10 +23,10 @@ typedef uint32_t FFonePAVirtualDeviceFlags;
 #define FFONE_PA_VIRTUAL_DEVICE_FLAGS_LOADED 1U << 1
 
 ffone_rc(FFonePAVirtualSource) ffone_pa_virtual_source_new(
-    ffone_rc_ptr(FFonePAContext) pa_ctx,
+    ffone_rc_ptr(FFonePACore) core,
     ffone_rc_ptr(FFonePAVirtualSink) master
 );
 
-ffone_rc(FFonePAVirtualSink) ffone_pa_virtual_sink_new(ffone_rc_ptr(FFonePAContext) pa_ctx);
+ffone_rc(FFonePAVirtualSink) ffone_pa_virtual_sink_new(ffone_rc_ptr(FFonePACore) core);
 
 #endif /* _FFONE_VIRTUAL_DEVICE_H */

@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "audio.h"
+#include "queue.h"
 #include "rc.h"
 
 #define FFONE_DEFAULT_SAMPLE_RATE 8000
@@ -21,8 +22,9 @@ typedef uint32_t StreamFlags;
 typedef struct FFonePAStream FFonePAStream;
 
 ffone_rc(FFonePAStream) ffone_pa_stream_new(
-    ffone_rc_ptr(FFonePAContext) pa_ctx,
+    ffone_rc_ptr(FFonePACore) core,
     ffone_rc_ptr(FFonePAVirtualSink) sink,
+    ffone_rc(RawAudioQueue) queue,
     uint32_t sample_rate,
     RawAudioFormat format
 );

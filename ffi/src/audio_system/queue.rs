@@ -185,6 +185,18 @@ impl RawAudioQueueRC {
         }
     }
 
+    pub fn has_buffers(&self) -> bool {
+        unsafe {
+            (*self.0).has_buffers()
+        }
+    }
+
+    pub fn has_bytes(&self) -> bool {
+        unsafe {
+            (*self.0).has_bytes()
+        }
+    }
+
     pub fn into_raw(self) -> *mut RawAudioQueue {
         ManuallyDrop::new(self).0
     }

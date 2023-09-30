@@ -8,7 +8,6 @@ typedef struct RcHeader {
     size_t weak_count;
     
     ffone_rc_dtor_t dtor;
-    bool is_dtor_running;
 } RcHeader;
 
 static void rc_header_init(RcHeader *rc_header, ffone_rc_dtor_t dtor) {
@@ -17,10 +16,9 @@ static void rc_header_init(RcHeader *rc_header, ffone_rc_dtor_t dtor) {
     }
 
     rc_header->strong_count = 1;
-    rc_header->weak_count = 0;
+    rc_header->weak_count = 1;
 
     rc_header->dtor = dtor;
-    rc_header->is_dtor_running = false;
 }
 
 ffone_rc(void) ffone_rc_alloc(size_t size, ffone_rc_dtor_t dtor) {
@@ -58,7 +56,7 @@ ffone_rc(void) ffone_rc_ref(ffone_rc_ptr(void) rc) {
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    if (rc_header->strong_count == 0 || rc_header->is_dtor_running) {
+    if (rc_header->strong_count == 0) {
         return NULL;
     }
     ++rc_header->strong_count;
@@ -78,12 +76,10 @@ void ffone_rc_unref(ffone_rc(void) rc) {
 
     if (--rc_header->strong_count == 0) {
         if (rc_header->dtor) {
-            rc_header->is_dtor_running = true;
             (rc_header->dtor)(rc);
-            rc_header->is_dtor_running = false;
         }
         
-        if (rc_header->weak_count == 0) {
+        if (--rc_header->weak_count == 0) {
             free(rc_header);
         }
     }
@@ -121,5 +117,5 @@ bool ffone_rc_is_destructed(ffone_rc_ptr(void) rc) {
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    return rc_header->strong_count == 0 && !rc_header->is_dtor_running;
+    return rc_header->strong_count == 0;
 }
