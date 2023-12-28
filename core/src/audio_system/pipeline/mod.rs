@@ -184,12 +184,10 @@ impl AudioPipeline {
         @prev resizer;
 
         @modify_on_set (sync: &mut Synchronizer) => {
-            if let Some(clock) = mic.provide_clock() {
-                sync.set_virtual_microphone_clock(clock);
-            }
+            sync.set_virtual_microphone_statistics(mic.provide_statistics());
         };
         @modify_on_take (sync: &mut Synchronizer) => {
-            sync.unset_virtual_microphone_clock();
+            sync.unset_virtual_microphone_statistics();
         };
     }
 }

@@ -16,11 +16,8 @@ extern "C" {
     pub fn ffone_rc_unref(rc: *mut ::std::os::raw::c_void);
 }
 extern "C" {
-    pub fn ffone_rc_ref_weak(rc: *mut ::std::os::raw::c_void) -> *mut ::std::os::raw::c_void;
+    pub fn ffone_rc_lock(rc: *mut ::std::os::raw::c_void);
 }
 extern "C" {
-    pub fn ffone_rc_unref_weak(rc: *mut ::std::os::raw::c_void);
-}
-extern "C" {
-    pub fn ffone_rc_is_destructed(rc: *mut ::std::os::raw::c_void) -> bool;
+    pub fn ffone_rc_unlock(rc: *mut ::std::os::raw::c_void);
 }

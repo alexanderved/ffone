@@ -14,7 +14,7 @@ use crate::{
 
 use mueue::*;
 
-pub(in crate::audio_system) struct AudioDemuxer {
+pub struct AudioDemuxer {
     send: MessageSender<AudioSystemElementMessage>,
     output: Option<MessageSender<EncodedAudioBuffer>>,
 
@@ -22,7 +22,7 @@ pub(in crate::audio_system) struct AudioDemuxer {
 }
 
 impl AudioDemuxer {
-    pub(in crate::audio_system) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
+    pub fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
         Self {
             send,
             output: None,
@@ -31,7 +31,7 @@ impl AudioDemuxer {
         }
     }
 
-    pub(in crate::audio_system) fn push(&mut self, buf: MuxedAudioBuffer) {
+    pub fn push(&mut self, buf: MuxedAudioBuffer) {
         self.muxed_audio.push_back(buf);
     }
 

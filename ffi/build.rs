@@ -53,9 +53,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .allowlist_function("ffone_rc_set_dtor")
         .allowlist_function("ffone_rc_ref")
         .allowlist_function("ffone_rc_unref")
-        .allowlist_function("ffone_rc_ref_weak")
-        .allowlist_function("ffone_rc_unref_weak")
-        .allowlist_function("ffone_rc_is_destructed")
+        .allowlist_function("ffone_rc_lock")
+        .allowlist_function("ffone_rc_unlock")
         .generate()?
         .write_to_file("src/rc.rs")?;
 
@@ -63,6 +62,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .flag("-Wall")
         .flag("-Wextra")
         .flag("-Wpedantic")
+        .flag("-std=c11")
+        .flag("-lpthread")
         .include("include/")
         .file("src/util.c")
         .file("src/rc.c")

@@ -4,6 +4,8 @@ use std::sync::Arc;
 use std::time::*;
 use std::{fmt, iter, ops};
 
+use crate::audio_system::audio::RawAudioFormat;
+
 use super::RingBuffer;
 
 #[derive(
@@ -20,7 +22,7 @@ impl ClockTime {
 
     pub const NANOSECOND: Self = Self::from_nanos(1);
     pub const MICROSECOND: Self = Self::from_micros(1);
-    pub const MILLIECOND: Self = Self::from_millis(1);
+    pub const MILLISECOND: Self = Self::from_millis(1);
     pub const SECOND: Self = Self::from_secs(1);
 
     pub const fn from_nanos(nanos: u64) -> Self {
@@ -43,44 +45,63 @@ impl ClockTime {
         Self(dur.as_nanos() as u64)
     }
 
-    pub const fn as_nanos(&self) -> u64 {
+    pub const fn as_nanos(self) -> u64 {
         self.0
     }
 
-    pub const fn as_micros(&self) -> u64 {
+    pub const fn as_micros(self) -> u64 {
         self.0 * Self::MICROS_IN_SEC / Self::NANOS_IN_SEC
     }
 
-    pub const fn as_millis(&self) -> u64 {
+    pub const fn as_millis(self) -> u64 {
         self.0 * Self::MILLIS_IN_SEC / Self::NANOS_IN_SEC
     }
 
-    pub const fn as_secs(&self) -> u64 {
+    pub const fn as_secs(self) -> u64 {
         self.0 / Self::NANOS_IN_SEC
     }
 
-    pub const fn as_dur(&self) -> Duration {
+    pub const fn as_dur(self) -> Duration {
         Duration::from_nanos(self.0)
     }
 
-    pub fn to_master_time(&self, calibration_info: ClockCalibrationInfo) -> Self {
-        let slope_num = calibration_info.slope_num;
-        let slope_denom = calibration_info.slope_denom;
+    pub fn to_master_time(self, calibration_info: ClockCalibrationInfo) -> Self {
+        let slope = calibration_info.slope;
 
         let master_time_mean = calibration_info.observation_mean.master_time;
         let slave_time_mean = calibration_info.observation_mean.slave_time;
 
-        (*self - slave_time_mean) * slope_num / slope_denom + master_time_mean
+        let a = (self - slave_time_mean).as_nanos() as f64 * slope;
+        Self::from_nanos(a as u64) + master_time_mean
     }
 
-    pub fn to_slave_time(&self, calibration_info: ClockCalibrationInfo) -> Self {
-        let slope_num = calibration_info.slope_num;
-        let slope_denom = calibration_info.slope_denom;
+    pub fn to_slave_time(self, calibration_info: ClockCalibrationInfo) -> Self {
+        let slope = calibration_info.slope;
 
         let master_time_mean = calibration_info.observation_mean.master_time;
         let slave_time_mean = calibration_info.observation_mean.slave_time;
 
-        (*self - master_time_mean) * slope_denom / slope_num + slave_time_mean
+        (self - master_time_mean) / slope + slave_time_mean
+    }
+
+    pub fn from_no_samples(no_samples: usize, sample_rate: u32) -> Self {
+        let sample_duration = Self::NANOS_IN_SEC as usize / sample_rate as usize;
+        Self::from_nanos((sample_duration * no_samples) as u64)
+    }
+
+    pub fn to_no_samples(self, sample_rate: u32) -> usize {
+        let sample_duration = Self::NANOS_IN_SEC as usize / sample_rate as usize;
+        self.as_nanos() as usize / sample_duration
+    }
+
+    pub fn from_no_bytes(no_bytes: usize, sample_rate: u32, format: RawAudioFormat) -> Self {
+        let sample_duration = Self::NANOS_IN_SEC as usize / sample_rate as usize;
+        Self::from_nanos((sample_duration * no_bytes / format.no_bytes()) as u64)
+    }
+
+    pub fn to_no_bytes(self, sample_rate: u32, format: RawAudioFormat) -> usize {
+        let sample_duration = Self::NANOS_IN_SEC as usize / sample_rate as usize;
+        self.as_nanos() as usize / sample_duration * format.no_bytes()
     }
 
     pub fn saturating_sub(self, rhs: Self) -> Self {
@@ -89,6 +110,10 @@ impl ClockTime {
         }
 
         self - rhs
+    }
+
+    pub fn abs_diff(self, rhs: Self) -> Self {
+        Self(self.0.abs_diff(rhs.0))
     }
 }
 
@@ -147,6 +172,14 @@ impl ops::Mul<u64> for ClockTime {
     }
 }
 
+impl ops::Mul<f64> for ClockTime {
+    type Output = Self;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Self((self.0 as f64 * rhs) as u64)
+    }
+}
+
 impl ops::Div for ClockTime {
     type Output = Self;
 
@@ -160,6 +193,14 @@ impl ops::Div<u64> for ClockTime {
 
     fn div(self, rhs: u64) -> Self::Output {
         Self(self.0 / rhs)
+    }
+}
+
+impl ops::Div<f64> for ClockTime {
+    type Output = Self;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        Self((self.0 as f64 / rhs) as u64)
     }
 }
 
@@ -291,19 +332,17 @@ impl iter::Sum for ClockObservation {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClockCalibrationInfo {
-    pub slope_num: u64,
-    pub slope_denom: u64,
+    pub slope: f64,
 
     pub observation_mean: ClockObservation,
 }
 
 impl ClockCalibrationInfo {
-    pub fn new(slope_num: u64, slope_denom: u64, observation_mean: ClockObservation) -> Self {
+    pub fn new(slope: f64, observation_mean: ClockObservation) -> Self {
         Self {
-            slope_num,
-            slope_denom,
+            slope,
             observation_mean,
         }
     }
@@ -319,29 +358,32 @@ impl ClockCalibrationInfo {
 
         let slave_time_mean = observation_mean.slave_time;
 
-        let slope_num = observations
+        let slope_num = (observations
             .clone()
             .map(ClockObservation::mul_times)
             .sum::<ClockTime>()
-            - observation_mean.mul_times() * n;
-        let slope_denom = observations
+            - observation_mean.mul_times() * n)
+            .as_nanos();
+
+        let slope_denom = (observations
             .map(|observation| observation.slave_time * observation.slave_time)
             .sum::<ClockTime>()
-            - slave_time_mean * slave_time_mean * n;
+            - slave_time_mean * slave_time_mean * n)
+            .as_nanos();
 
-        Self::new(
-            slope_num.as_nanos(),
-            slope_denom.as_nanos(),
-            observation_mean,
-        )
+        let mut slope = slope_num as f64 / slope_denom as f64;
+        if slope.is_nan() {
+            slope = 1.0;
+        }
+
+        Self::new(slope, observation_mean)
     }
 }
 
 impl Default for ClockCalibrationInfo {
     fn default() -> Self {
         Self {
-            slope_num: 1,
-            slope_denom: 1,
+            slope: 1.0,
             observation_mean: ClockObservation::default(),
         }
     }

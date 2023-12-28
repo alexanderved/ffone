@@ -24,9 +24,7 @@ void ffone_rc_set_dtor(ffone_rc_ptr(void) rc, ffone_rc_dtor_t dtor);
 ffone_rc(void) ffone_rc_ref(ffone_rc_ptr(void) rc);
 void ffone_rc_unref(ffone_rc(void) rc);
 
-ffone_weak(void) ffone_rc_ref_weak(ffone_rc_ptr(void) rc);
-void ffone_rc_unref_weak(ffone_weak(void) rc);
-
-bool ffone_rc_is_destructed(ffone_rc_ptr(void) rc);
+void ffone_rc_lock(ffone_rc_ptr(void) rc);
+void ffone_rc_unlock(ffone_rc_ptr(void) rc);
 
 #endif /* _FFONE_RC_H */

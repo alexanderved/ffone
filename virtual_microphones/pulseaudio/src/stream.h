@@ -15,8 +15,6 @@
 typedef uint32_t StreamFlags;
 
 #define FFONE_STREAM_FLAG_NONE 0
-#define FFONE_STREAM_FLAG_CREATED 1U << 0
-#define FFONE_STREAM_FLAG_CONNECTED 1U << 1
 #define FFONE_STREAM_FLAG_OUTDATED_PROPS 1U << 2
 
 typedef struct FFonePAStream FFonePAStream;

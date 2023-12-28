@@ -72,7 +72,7 @@ impl TryFrom<&[u8]> for EncodedAudioHeader {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodedAudioBuffer {
     pub header: EncodedAudioHeader,
-    pub start_ts: ClockTime,
+    pub start_ts: Option<ClockTime>,
     pub data: Vec<u8>,
 }
 
@@ -96,7 +96,7 @@ impl TryFrom<MuxedAudioBuffer> for EncodedAudioBuffer {
 
         Ok(Self {
             header,
-            start_ts,
+            start_ts: Some(start_ts),
             data,
         })
     }
@@ -194,31 +194,39 @@ impl RawAudioBuffer {
         ClockTime::from_nanos(duration_nanos)
     }
 
-    pub fn sample_duration(&self) -> ClockTime {
-        let duration = self.duration();
-        let no_samples = self.no_samples() as u64;
-
-        if no_samples == 0 {
-            return ClockTime::ZERO;
-        }
-
-        duration / no_samples
-    }
-
-    pub fn truncate_front(&mut self, no_samples: u64) {
+    pub fn truncate_front(&mut self, no_samples: usize) {
         let no_bytes = self.format().no_bytes();
 
         vec_truncate_front(self.as_vec_mut(), no_samples as usize * no_bytes);
     }
 
     pub fn truncate_duration_front(&mut self, cut_dur: ClockTime) {
-        let no_bytes = self.format().no_bytes();
-        let sample_duration = self.sample_duration();
+        let sample_rate = self.sample_rate();
+        let format = self.format();
 
-        vec_truncate_front(
-            self.as_vec_mut(),
-            (cut_dur / sample_duration).as_nanos() as usize * no_bytes,
-        );
+        vec_truncate_front(self.as_vec_mut(), cut_dur.to_no_bytes(sample_rate, format));
+    }
+
+    pub fn truncate(&mut self, no_samples: usize) {
+        let no_bytes = self.format().no_bytes();
+
+        self.data.truncate(no_samples as usize * no_bytes);
+    }
+
+    pub fn truncate_duration(&mut self, cut_dur: ClockTime) {
+        let sample_rate = self.sample_rate();
+        let format = self.format();
+
+        self.data.truncate(cut_dur.to_no_bytes(sample_rate, format));
+    }
+
+    pub fn split_at_timestamp(mut self, ts: ClockTime) -> (Self, Self) {
+        let bytes = ts.to_no_bytes(self.sample_rate(), self.format());
+
+        let new_buf = Self::new(self.data[bytes..].to_vec(), self.format, self.sample_rate);
+        self.data.truncate(bytes);
+
+        (self, new_buf)
     }
 }
 
@@ -257,6 +265,14 @@ impl TimestampedRawAudioBuffer {
         self.raw.no_samples()
     }
 
+    pub fn format(&self) -> RawAudioFormat {
+        self.raw.format()
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.raw.sample_rate()
+    }
+
     pub fn start(&self) -> Option<ClockTime> {
         self.start
     }
@@ -269,12 +285,8 @@ impl TimestampedRawAudioBuffer {
         self.raw.duration()
     }
 
-    pub fn sample_duration(&self) -> ClockTime {
-        self.raw.sample_duration()
-    }
-
-    pub fn truncate_front(&mut self, no_samples: u64) {
-        let cut_dur = self.sample_duration() * no_samples;
+    pub fn truncate_front(&mut self, no_samples: usize) {
+        let cut_dur = ClockTime::from_no_samples(no_samples, self.sample_rate());
         if let Some(start) = self.start.as_mut() {
             *start += cut_dur;
         }
@@ -288,6 +300,20 @@ impl TimestampedRawAudioBuffer {
         }
 
         self.raw.truncate_duration_front(cut_dur);
+    }
+
+    pub fn truncate_duration(&mut self, cut_dur: ClockTime) {
+        self.raw.truncate_duration(cut_dur);
+    }
+
+    pub fn split_at_timestamp(self, ts: ClockTime) -> (Self, Self) {
+        let start = self.start;
+
+        let (first_raw_buf, second_raw_buf) = self.into_raw().split_at_timestamp(ts);
+        let first_ts_buf = Self::new(first_raw_buf, start);
+        let second_ts_buf = Self::new(second_raw_buf, start.map(|start| start + ts));
+
+        (first_ts_buf, second_ts_buf)
     }
 }
 

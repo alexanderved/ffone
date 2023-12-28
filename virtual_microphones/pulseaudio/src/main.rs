@@ -11,10 +11,10 @@ fn main() {
     let (send, _) = unidirectional_queue();
     let mut mic = PAVirtualMicrophone::new(send).unwrap();
     let in_send = mic.create_input();
-    
+
     let mut accum: f64 = 0.0;
 
-    for _ in 0..8 * 3 {
+    for _ in 0..8 * 5 {
         let mut data: Vec<u8> = vec![];
         for _ in 0..1000 {
             accum += 440.0f64 * 2.0 * PI / 8000.0;
@@ -29,7 +29,7 @@ fn main() {
         let _ = in_send.send(RawAudioBuffer::new(data, RawAudioFormat::U8, 8000));
     }
 
-    for _ in 0..8 * 3 {
+    /* for _ in 0..8 * 3 {
         let mut data: Vec<u8> = vec![];
         for _ in 0..1000 {
             accum += 440.0f64 * 2.0 * PI / 8000.0;
@@ -74,13 +74,13 @@ fn main() {
         }
 
         let _ = in_send.send(RawAudioBuffer::new(data, RawAudioFormat::U8, 48000));
-    }
+    } */
 
     loop {
         let _ = mic.update(None);
 
-        if !mic.queue.has_bytes() {
+        /* if !mic.queue.has_bytes() {
             break;
-        }
+        } */
     }
 }

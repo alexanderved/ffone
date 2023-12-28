@@ -2,8 +2,8 @@
 mod tests;
 
 use core::audio_system::audio::{
-    AudioCodec, EncodedAudioBuffer, EncodedAudioHeader, RawAudioBuffer,
-    RawAudioFormat, TimestampedRawAudioBuffer,
+    AudioCodec, EncodedAudioBuffer, EncodedAudioHeader, RawAudioBuffer, RawAudioFormat,
+    TimestampedRawAudioBuffer,
 };
 use core::util::ClockTime;
 
@@ -55,12 +55,7 @@ impl GstContext {
         pipeline
             .add_many(&[src.upcast_ref(), &parser, &decoder, sink.upcast_ref()])
             .unwrap();
-        gst::Element::link_many(&[
-            src.upcast_ref(),
-            &parser,
-            &decoder,
-            sink.upcast_ref()
-        ]).unwrap();
+        gst::Element::link_many(&[src.upcast_ref(), &parser, &decoder, sink.upcast_ref()]).unwrap();
 
         let this = Self {
             audio_info,
@@ -81,10 +76,12 @@ impl GstContext {
         let mut gst_buffer = gst::Buffer::from_slice(buffer.data);
 
         if let Some(gst_buffer) = gst_buffer.get_mut() {
-            let ts = gst::ClockTime::from_nseconds(buffer.start_ts.as_nanos());
+            if let Some(ts) = buffer.start_ts {
+                let ts = gst::ClockTime::from_nseconds(ts.as_nanos());
 
-            gst_buffer.set_dts(ts);
-            gst_buffer.set_pts(ts);
+                gst_buffer.set_dts(ts);
+                gst_buffer.set_pts(ts);
+            }
         }
 
         let _ = self.src.push_buffer(gst_buffer);

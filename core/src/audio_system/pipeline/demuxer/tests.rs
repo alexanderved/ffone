@@ -29,7 +29,7 @@ fn test_demux() {
             codec: AudioCodec::Opus,
             sample_rate: 48000,
         },
-        start_ts: ClockTime::from_nanos(TS_IN_NANOS),
+        start_ts: Some(ClockTime::from_nanos(TS_IN_NANOS)),
         data: vec![42; 16],
     };
 

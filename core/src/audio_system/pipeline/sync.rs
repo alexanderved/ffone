@@ -12,18 +12,19 @@ use crate::audio_system::element::{
 };
 
 use std::collections::VecDeque;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use mueue::*;
 
-pub(in crate::audio_system) struct Synchronizer {
+use super::virtual_microphone::VirtualMicrophoneStatistics;
+
+pub struct Synchronizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<TimestampedRawAudioBuffer>>,
     output: Option<MessageSender<ResizableRawAudioBuffer>>,
 
     sys_clock: Arc<dyn Clock>,
-    virtual_mic_clock: Option<Rc<dyn SlaveClock>>,
+    virtual_mic_stats: Option<VirtualMicrophoneStatistics>,
     virtual_mic_clock_update_timer: Timer,
 
     first_buf_arrival_ts: Option<ClockTime>,
@@ -31,20 +32,19 @@ pub(in crate::audio_system) struct Synchronizer {
     buffer_expected_ts: ClockTime,
 
     queue: VecDeque<TimestampedRawAudioBuffer>,
+
+    cumulative_delay: ClockTime,
 }
 
 impl Synchronizer {
-    pub(in crate::audio_system) fn new(
-        send: MessageSender<AudioSystemElementMessage>,
-        sys_clock: Arc<dyn Clock>,
-    ) -> Self {
+    pub fn new(send: MessageSender<AudioSystemElementMessage>, sys_clock: Arc<dyn Clock>) -> Self {
         Self {
             send,
             input: None,
             output: None,
 
             sys_clock,
-            virtual_mic_clock: None,
+            virtual_mic_stats: None,
             virtual_mic_clock_update_timer: Timer::new(OBSERVATIONS_INTERVAL),
 
             first_buf_arrival_ts: None,
@@ -52,18 +52,20 @@ impl Synchronizer {
             buffer_expected_ts: ClockTime::ZERO,
 
             queue: VecDeque::new(),
+
+            cumulative_delay: ClockTime::ZERO,
         }
     }
 
-    pub(in crate::audio_system) fn set_virtual_microphone_clock(
+    pub fn set_virtual_microphone_statistics(
         &mut self,
-        virtual_mic_clock: Rc<dyn SlaveClock>,
+        virtual_mic_stats: VirtualMicrophoneStatistics,
     ) {
-        self.virtual_mic_clock = Some(virtual_mic_clock);
+        self.virtual_mic_stats = Some(virtual_mic_stats);
     }
 
-    pub(in crate::audio_system) fn unset_virtual_microphone_clock(&mut self) {
-        self.virtual_mic_clock = None;
+    pub fn unset_virtual_microphone_statistics(&mut self) {
+        self.virtual_mic_stats = None;
     }
 
     fn collect_audio_buffers(&mut self) {
@@ -73,20 +75,39 @@ impl Synchronizer {
     }
 
     fn process_audio_buffers(&mut self) {
+        const DEFAULT_VIRTUAL_MIC_SLOPE: f64 = 1.0;
+        const DEFAULT_AVAILABLE_DURATION: ClockTime = ClockTime::from_secs(3600);
+
+        const AUDIO_RESCALE_THRESHOLD: ClockTime = ClockTime::from_millis(1);
+
+        let virtual_mic_clock_slope = self
+            .virtual_mic_stats
+            .as_ref()
+            .and_then(VirtualMicrophoneStatistics::clock)
+            .map(SlaveClock::get_calibration_info)
+            .map(|calibration_info| calibration_info.slope)
+            .unwrap_or(DEFAULT_VIRTUAL_MIC_SLOPE);
+
+        let mut real_available_duration = self
+            .virtual_mic_stats
+            .as_ref()
+            .map(VirtualMicrophoneStatistics::available_duration)
+            .unwrap_or(DEFAULT_AVAILABLE_DURATION);
+        
         while let Some(mut ts_buf) = self.queue.pop_front() {
-            if ts_buf.no_samples() == 0 {
-                continue;
-            }
             if ts_buf == TimestampedRawAudioBuffer::NULL {
                 self.on_eos();
 
+                continue;
+            }
+            if ts_buf.no_samples() == 0 {
                 continue;
             }
 
             let elapsed = self.sys_clock.get_time();
 
             let buf_start_ts = ts_buf.start().unwrap_or(self.buffer_expected_ts);
-            let buf_duration = ts_buf.duration();
+            let mut buf_duration = ts_buf.duration();
 
             let first_buf_arrival_ts = *self.first_buf_arrival_ts.get_or_insert(elapsed);
             let first_buf_start_ts = *self.first_buf_start_ts.get_or_insert(buf_start_ts);
@@ -100,24 +121,56 @@ impl Synchronizer {
 
                     continue;
                 }
-                self.buffer_expected_ts = buf_start_ts + buf_duration;
 
-                let delay = elapsed - desired_play_date;
-                let mut real_duration = buf_duration.saturating_sub(delay);
+                let delay = elapsed.saturating_sub(desired_play_date);
 
-                if let Some(virtual_mic_clock) = self.virtual_mic_clock.as_deref() {
-                    let calibration_info = virtual_mic_clock.get_calibration_info();
+                let mut real_duration =
+                    buf_duration.saturating_sub(delay) / virtual_mic_clock_slope;
+                let mut available_duration =
+                    real_available_duration * virtual_mic_clock_slope + delay;
 
-                    real_duration = real_duration.to_slave_time(calibration_info);
+                if real_duration.abs_diff(buf_duration) < AUDIO_RESCALE_THRESHOLD {
+                    self.cumulative_delay += buf_duration - real_duration;
+                    dbg!(self.cumulative_delay);
+
+                    real_duration = buf_duration;
+                    available_duration = real_available_duration;
                 }
 
-                let sample_duration = ts_buf.sample_duration();
-                let desired_no_samples = (real_duration / sample_duration).as_nanos() as usize;
+                /* if real_duration > real_available_duration {
+                    let (first_ts_buf, second_ts_buf) =
+                        ts_buf.split_at_timestamp(available_duration);
+
+                    ts_buf = first_ts_buf;
+                    buf_duration = available_duration;
+                    real_duration = real_available_duration;
+                    real_available_duration = ClockTime::ZERO;
+
+                    self.queue.push_front(second_ts_buf);
+                } */
+
+                //dbg!(real_available_duration);
+
+                /* const CORRECTION_THRESHOLD: ClockTime = ClockTime::from_millis(5);
+                if self.cumulative_delay > CORRECTION_THRESHOLD {
+                    real_duration -= self.cumulative_delay;
+                    self.cumulative_delay = ClockTime::ZERO;
+                } */
+
+                let desired_no_samples = real_duration.to_no_samples(ts_buf.sample_rate());
                 let buf = ResizableRawAudioBuffer::new(ts_buf.into_raw(), desired_no_samples);
 
                 if let Some(output) = self.output.as_ref() {
                     let _ = output.send(buf);
                 }
+
+                self.buffer_expected_ts = buf_start_ts + buf_duration;
+
+                
+                /* real_available_duration -= real_duration;
+                if real_available_duration == ClockTime::ZERO {
+                    break;
+                } */
             } else {
                 self.queue.push_front(ts_buf);
 
@@ -135,7 +188,11 @@ impl Synchronizer {
 
 impl Runnable for Synchronizer {
     fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        if let Some(virtual_mic_clock) = self.virtual_mic_clock.as_deref() {
+        if let Some(virtual_mic_clock) = self
+            .virtual_mic_stats
+            .as_ref()
+            .and_then(VirtualMicrophoneStatistics::clock)
+        {
             if self.virtual_mic_clock_update_timer.is_time_out() {
                 virtual_mic_clock.record_observation();
             }

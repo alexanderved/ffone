@@ -22,6 +22,18 @@ pub struct GstDecoder {
 }
 
 impl GstDecoder {
+    pub fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
+        Self {
+            send,
+
+            input: None,
+            output: None,
+
+            audio_info: None,
+            context: None,
+        }
+    }
+
     fn update_audio_info(&mut self, info: EncodedAudioHeader) {
         if self.audio_info == Some(info) {
             return;

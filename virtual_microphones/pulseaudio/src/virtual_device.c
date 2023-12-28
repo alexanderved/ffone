@@ -10,12 +10,12 @@
 static const char *ffone_pa_virtual_sink_get_name(ffone_rc_ptr(FFonePAVirtualSink) sink);
 
 typedef struct FFonePAVirtualDevice {
-    ffone_rc(FFonePACore) core;
+    ffone_rc(FFonePACore) core; /* const */
     FFonePAVirtualDeviceFlags flags;
 
     uint32_t idx;
-    char *name;
-    char *descr;
+    char *name; /* const */
+    char *descr; /* const */
 } FFonePAVirtualDevice;
 
 static int virtual_device_new(
@@ -84,6 +84,8 @@ static void virtual_device_loaded(pa_context *c, uint32_t idx, void *userdata) {
     if (device) {
         device->flags |= FFONE_PA_VIRTUAL_DEVICE_FLAGS_LOADED;
         device->idx = idx;
+
+        ffone_pa_core_loop_signal(device->core, 0);
     }
 
     (void)c;
@@ -96,6 +98,10 @@ static void virtual_device_unloaded(pa_context *c, int success, void *userdata) 
     if (success && device) {
         device->flags &= ~FFONE_PA_VIRTUAL_DEVICE_FLAGS_LOADED;
         device->idx = FFONE_PA_VIRTUAL_DEVICE_INDEX_NONE;
+    }
+
+    if (device) {
+        ffone_pa_core_loop_signal(device->core, 0);
     }
 
     (void)c;

@@ -98,41 +98,6 @@ impl AudioSystem {
             self.pipeline.runnable_mut().set_virtual_microphone(mic);
         }
     }
-
-    /* pub fn set_audio_info(&mut self, info: EncodedAudioInfo) {
-        self.provide_audio_info_to_decoders(info);
-        self.provide_sample_rate_to_microphones(info.sample_rate);
-    }
-
-    fn provide_audio_info_to_decoders(&mut self, info: EncodedAudioInfo) {
-        self.audio_decs
-            .values_mut()
-            .filter_map(|dec| dec.as_deref_mut())
-            .chain(
-                self.pipeline
-                    .runnable_mut()
-                    .audio_decoder_mut()
-                    .map(|dec| &mut **dec),
-            )
-            .for_each(|dec| {
-                dec.set_audio_info(info);
-            });
-    }
-
-    fn provide_sample_rate_to_microphones(&mut self, rate: u32) {
-        self.virtual_mics
-            .values_mut()
-            .filter_map(|mic| mic.as_deref_mut())
-            .chain(
-                self.pipeline
-                    .runnable_mut()
-                    .virtual_microphone_mut()
-                    .map(|mic| &mut **mic),
-            )
-            .for_each(|mic| {
-                mic.set_sample_rate(rate);
-            });
-    } */
 }
 
 fn collect_audio_decs(

@@ -16,14 +16,14 @@ use smallvec::SmallVec;
 
 const TEMP_SAMPLE_BUFFER_LEN: usize = 4;
 
-pub(in crate::audio_system) struct AudioResizer {
+pub struct AudioResizer {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<ResizableRawAudioBuffer>>,
     output: Option<MessageSender<RawAudioBuffer>>,
 }
 
 impl AudioResizer {
-    pub(in crate::audio_system) fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
+    pub fn new(send: MessageSender<AudioSystemElementMessage>) -> Self {
         Self {
             send,
             input: None,
@@ -42,6 +42,8 @@ impl Runnable for AudioResizer {
             let no_samples = audio.no_samples();
             let desired_no_samples = audio.desired_no_samples();
             let raw_audio = audio.into_raw();
+
+            dbg!(no_samples, desired_no_samples);
 
             let Some(f) = choose_resize_function(no_samples, desired_no_samples) else {
                 continue;
@@ -157,11 +159,19 @@ fn downsample(mut audio: RawAudioBuffer, mut desired_no_samples: usize) -> RawAu
     audio
 }
 
-fn take_average_sample(sample_iter: impl Iterator<Item = Sample> + ExactSizeIterator) -> Sample {
-    let no_sample = sample_iter.len();
-    let sample_sum = sample_iter.sum::<Sample>();
+fn take_average_sample<I>(mut sample_iter: I) -> Sample
+where
+    I: Iterator<Item = Sample> + ExactSizeIterator,
+{
+    /* let no_sample = sample_iter.len();
+    let avg_sample = sample_iter
+        .map(|s| dbg!(s))
+        .map(|s| s / no_sample).sum::<Sample>();
+    println!("AVG = {:?}\n", avg_sample);
 
-    sample_sum / no_sample
+    avg_sample */
+
+    sample_iter.next().unwrap()
 }
 
 fn add_silence(mut audio: RawAudioBuffer, desired_no_samples: usize) -> RawAudioBuffer {
@@ -399,7 +409,7 @@ impl ops::Add for Sample {
             (S::U8(a), S::U8(b)) => S::U8(a + b),
 
             (S::S16BE(a), S::S16BE(b)) => S::S16BE(a + b),
-            (S::S16LE(a), S::S16LE(b)) => S::S16LE(a + b),
+            (S::S16LE(a), S::S16LE(b)) => S::S16LE(a.saturating_add(b)),
 
             (S::S24LE(a), S::S24LE(b)) => S::S24LE(a + b),
             (S::S24BE(a), S::S24BE(b)) => S::S24BE(a + b),

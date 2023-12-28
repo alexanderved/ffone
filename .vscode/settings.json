@@ -23,6 +23,7 @@
         "type_traits": "c",
         "utility": "c",
         "audio.h": "c",
-        "queue.h": "c"
+        "queue.h": "c",
+        "pulseaudio.h": "c"
     }
 }

@@ -10,7 +10,12 @@ typedef struct FFonePACore FFonePACore;
 ffone_rc(FFonePACore) ffone_pa_core_new(void);
 
 pa_context *ffone_pa_core_get_context(ffone_rc_ptr(FFonePACore) core);
-pa_mainloop *ffone_pa_core_get_loop(ffone_rc_ptr(FFonePACore) core);
+
+pa_threaded_mainloop *ffone_pa_core_get_loop(ffone_rc_ptr(FFonePACore) core);
+void ffone_pa_core_loop_lock(ffone_rc_ptr(FFonePACore) core);
+void ffone_pa_core_loop_unlock(ffone_rc_ptr(FFonePACore) core);
+void ffone_pa_core_loop_signal(ffone_rc_ptr(FFonePACore) core, int val);
+void ffone_pa_core_loop_wait(ffone_rc_ptr(FFonePACore) core);
 
 int ffone_pa_core_execute_operation(ffone_rc_ptr(FFonePACore) core, pa_operation *o);
 
@@ -27,7 +32,5 @@ int ffone_pa_core_unload_virtual_device(
     pa_context_success_cb_t cb,
     void *userdata
 );
-
-int ffone_pa_core_iterate(ffone_rc_ptr(FFonePACore) core, int block);
 
 #endif /* _FFONE_PA_CORE_H */

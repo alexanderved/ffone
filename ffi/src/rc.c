@@ -1,13 +1,16 @@
 #include "rc.h"
+#include "error.h"
 
 #include <stdalign.h>
 #include <stddef.h>
+#include <stdatomic.h>
+#include <pthread.h>
 
 typedef struct RcHeader {
-    alignas(max_align_t) size_t strong_count;
-    size_t weak_count;
-    
-    ffone_rc_dtor_t dtor;
+    alignas(max_align_t) atomic_size_t strong_count;
+    _Atomic ffone_rc_dtor_t dtor;
+
+    pthread_mutex_t mutex;
 } RcHeader;
 
 static void rc_header_init(RcHeader *rc_header, ffone_rc_dtor_t dtor) {
@@ -15,10 +18,10 @@ static void rc_header_init(RcHeader *rc_header, ffone_rc_dtor_t dtor) {
         return;
     }
 
-    rc_header->strong_count = 1;
-    rc_header->weak_count = 1;
+    atomic_init(&rc_header->strong_count, 1);
+    atomic_init(&rc_header->dtor, dtor);
 
-    rc_header->dtor = dtor;
+    pthread_mutex_init(&rc_header->mutex, NULL);
 }
 
 ffone_rc(void) ffone_rc_alloc(size_t size, ffone_rc_dtor_t dtor) {
@@ -47,7 +50,7 @@ void ffone_rc_set_dtor(ffone_rc_ptr(void) rc, ffone_rc_dtor_t dtor) {
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    rc_header->dtor = dtor;
+    atomic_store(&rc_header->dtor, dtor);
 }
 
 ffone_rc(void) ffone_rc_ref(ffone_rc_ptr(void) rc) {
@@ -56,10 +59,7 @@ ffone_rc(void) ffone_rc_ref(ffone_rc_ptr(void) rc) {
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    if (rc_header->strong_count == 0) {
-        return NULL;
-    }
-    ++rc_header->strong_count;
+    atomic_fetch_add_explicit(&rc_header->strong_count, 1, memory_order_release);
 
     return rc;
 }
@@ -70,52 +70,35 @@ void ffone_rc_unref(ffone_rc(void) rc) {
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    if (rc_header->strong_count == 0) {
-        return;
-    }
 
-    if (--rc_header->strong_count == 0) {
-        if (rc_header->dtor) {
-            (rc_header->dtor)(rc);
+    if (atomic_fetch_sub_explicit(&rc_header->strong_count, 1, memory_order_release) == 1) {
+        atomic_thread_fence(memory_order_acquire);
+
+        ffone_rc_dtor_t dtor = atomic_load(&rc_header->dtor);
+        if (dtor) {
+            (dtor)(rc);
         }
-        
-        if (--rc_header->weak_count == 0) {
-            free(rc_header);
-        }
-    }
-}
 
-ffone_weak(void) ffone_rc_ref_weak(ffone_rc_ptr(void) rc) {
-    if (!rc) {
-        return NULL;
-    }
+        pthread_mutex_destroy(&rc_header->mutex);
 
-    RcHeader *rc_header = (RcHeader *)rc - 1;
-    ++rc_header->weak_count;
-
-    return rc;
-}
-
-void ffone_rc_unref_weak(ffone_weak(void) rc) {
-    if (!rc) {
-        return;
-    }
-
-    RcHeader *rc_header = (RcHeader *)rc - 1;
-    if (rc_header->weak_count == 0) {
-        return;
-    }
-
-    if (--rc_header->weak_count == 0 && ffone_rc_is_destructed(rc)) {
         free(rc_header);
     }
 }
 
-bool ffone_rc_is_destructed(ffone_rc_ptr(void) rc) {
+void ffone_rc_lock(ffone_rc_ptr(void) rc) {
     if (!rc) {
-        return true;
+        return;
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    return rc_header->strong_count == 0;
+    /* ffone_assert( */pthread_mutex_lock(&rc_header->mutex)/*  == 0) */;
+}
+
+void ffone_rc_unlock(ffone_rc_ptr(void) rc) {
+    if (!rc) {
+        return;
+    }
+
+    RcHeader *rc_header = (RcHeader *)rc - 1;
+    /* ffone_assert( */pthread_mutex_unlock(&rc_header->mutex)/*  == 0) */;
 }

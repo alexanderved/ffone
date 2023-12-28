@@ -14,12 +14,12 @@
 #include "error.h"
 
 struct FFonePAContext {
-    ffone_rc(FFonePACore) core;
+    ffone_rc(FFonePACore) core; /* const */
 
-    ffone_rc(FFonePAVirtualSink) sink;
-    ffone_rc(FFonePAVirtualSource) src;
+    ffone_rc(FFonePAVirtualSink) sink; /* const */
+    ffone_rc(FFonePAVirtualSource) src; /* const */
 
-    ffone_rc(FFonePAStream) stream;
+    ffone_rc(FFonePAStream) stream; /* const */
 };
 
 static void ffone_pa_ctx_dtor(void *opaque);
@@ -43,8 +43,6 @@ ffone_rc(FFonePAContext) ffone_pa_ctx_new(ffone_rc_ptr(RawAudioQueue) queue) {
 
     return pa_ctx;
 error:
-    fprintf(stderr, "Failed to create FFonePAContext\n");
-
     if (pa_ctx->stream) ffone_rc_unref(pa_ctx->stream);
 
     if (pa_ctx->src) ffone_rc_unref(pa_ctx->src);
@@ -52,8 +50,6 @@ error:
 
     if (pa_ctx->core) ffone_rc_unref(pa_ctx->core);
     if (pa_ctx) ffone_rc_unref(pa_ctx);
-
-    fprintf(stderr, "Failed FFonePAContext cleaned\n");
 
     return NULL;
 }
@@ -79,23 +75,16 @@ static void ffone_pa_ctx_dtor(void *opaque) {
 
 ffone_rc_ptr(FFonePAStream) ffone_pa_ctx_get_stream(ffone_rc_ptr(FFonePAContext) pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, NULL);
-    FFONE_RETURN_VAL_ON_FAILURE(!ffone_rc_is_destructed(pa_ctx), NULL);
 
     return pa_ctx->stream;
 }
 
 int ffone_pa_ctx_update(ffone_rc_ptr(FFonePAContext) pa_ctx, int block) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, FFONE_ERROR_INVALID_ARG);
-    FFONE_RETURN_VAL_ON_FAILURE(
-        !ffone_rc_is_destructed(pa_ctx) && pa_ctx->core,
-        FFONE_ERROR_BAD_STATE
-    );
-
-    int ret = ffone_pa_core_iterate(pa_ctx->core, block);
 
     if (pa_ctx->stream) {
         ffone_pa_stream_update(pa_ctx->stream);
     }
 
-    return ret;
+    return 0;
 }

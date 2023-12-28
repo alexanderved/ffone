@@ -11,6 +11,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .flag("-Wall")
         .flag("-Wextra")
         .flag("-pedantic")
+        .flag("-O2")
         .include("../../ffi/include")
         .file("src/pa_ctx.c")
         .file("src/core.c")

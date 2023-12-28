@@ -38,7 +38,7 @@ impl Runnable for FakeDevice {
             if let Some(flow) = flow {
                 *flow = ControlFlow::Break;
             }
-            
+
             return Ok(());
         }
 
