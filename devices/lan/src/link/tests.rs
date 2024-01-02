@@ -13,7 +13,6 @@ struct StopDevice;
 impl Message for StopDevice {}
 
 struct FakeDevice {
-    recv: MessageReceiver<StopDevice>,
     name: String,
     audio_port: u16,
 
@@ -30,7 +29,6 @@ impl FakeDevice {
 
     fn new(
         name: &str,
-        recv: MessageReceiver<StopDevice>,
         port: u16,
         audio_port: u16,
     ) -> error::Result<Self> {
@@ -39,7 +37,6 @@ impl FakeDevice {
         audio_stream.set_nonblocking(true)?;
 
         Ok(Self {
-            recv,
             name: String::from(name),
             audio_port,
 
@@ -63,15 +60,7 @@ impl FakeDevice {
 }
 
 impl Runnable for FakeDevice {
-    fn update(&mut self, flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        if matches!(self.recv.recv(), Some(StopDevice)) {
-            if let Some(flow) = flow {
-                *flow = ControlFlow::Break;
-            }
-
-            return Ok(());
-        }
-
+    fn update(&mut self) -> error::Result<()> {
         if let Some(addr) = self.audio_listener_addr {
             let packet = NetworkPacket::from_bytes([42; 42].to_vec());
             self.audio_stream.send_packet_to(addr, &packet)?;
@@ -114,9 +103,13 @@ fn run_device(
     audio_port: u16,
 ) -> error::Result<(MessageSender<StopDevice>, JoinHandle<()>)> {
     let (device_send, device_recv) = unidirectional_queue();
-    let mut device = FakeDevice::new(name, device_recv, port, audio_port)?;
+    let mut device = FakeDevice::new(name, port, audio_port)?;
     let device_handle = thread::spawn(move || {
-        let _ = device.run();
+        device.on_start();
+        while device_recv.recv().is_none() {
+            let _ = device.update();
+        }
+        device.on_stop();
     });
 
     Ok((device_send, device_handle))
@@ -149,8 +142,8 @@ fn create_link(
 
 #[test]
 fn test_on_info_received() -> error::Result<()> {
-    let device_port = 31707;
-    let audio_port = 31708;
+    let device_port = 31709;
+    let audio_port = 31710;
     let (device_send, device_handle) = run_device("fake", device_port, audio_port)?;
     let (mut link, _link_recv) = create_link(device_port, audio_port)?;
 

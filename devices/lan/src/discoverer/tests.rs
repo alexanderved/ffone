@@ -11,7 +11,6 @@ struct StopDevice;
 impl Message for StopDevice {}
 
 struct FakeDevice {
-    recv: MessageReceiver<StopDevice>,
     name: String,
     broadcast_socket: UdpSocket,
 }
@@ -20,12 +19,11 @@ impl FakeDevice {
     const PORT: u16 = 31707;
     const AUDIO_PORT: u16 = 31708;
 
-    fn new(name: &str, recv: MessageReceiver<StopDevice>) -> error::Result<Self> {
+    fn new(name: &str) -> error::Result<Self> {
         let broadcast_socket = UdpSocket::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))?;
         broadcast_socket.set_broadcast(true)?;
 
         Ok(Self {
-            recv,
             name: String::from(name),
             broadcast_socket,
         })
@@ -33,15 +31,7 @@ impl FakeDevice {
 }
 
 impl Runnable for FakeDevice {
-    fn update(&mut self, flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        if matches!(self.recv.recv(), Some(StopDevice)) {
-            if let Some(flow) = flow {
-                *flow = ControlFlow::Break;
-            }
-
-            return Ok(());
-        }
-
+    fn update(&mut self) -> error::Result<()> {
         let identity_packet = IdentityPacket {
             name: self.name.clone(),
             msg_port: Self::PORT,
@@ -60,9 +50,13 @@ impl Runnable for FakeDevice {
 
 fn run_device(name: &str) -> error::Result<(MessageSender<StopDevice>, JoinHandle<()>)> {
     let (device_send, device_recv) = unidirectional_queue();
-    let mut device = FakeDevice::new(name, device_recv)?;
+    let mut device = FakeDevice::new(name)?;
     let device_handle = thread::spawn(move || {
-        let _ = device.run();
+        device.on_start();
+        while device_recv.recv().is_none() {
+            let _ = device.update();
+        }
+        device.on_stop();
     });
 
     Ok((device_send, device_handle))

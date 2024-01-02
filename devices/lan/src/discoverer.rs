@@ -12,7 +12,6 @@ use core::device::link::*;
 use core::device::*;
 use core::error;
 use core::mueue::*;
-use core::util::ControlFlow;
 use core::util::Element;
 use core::util::Runnable;
 
@@ -69,12 +68,13 @@ impl Element for LanDiscoverer {
 }
 
 impl Runnable for LanDiscoverer {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        let msg = self.discover_devices().map_or_else(
-            DeviceSystemElementMessage::Error,
-            DeviceSystemElementMessage::NewDevicesDiscovered,
-        );
-        self.send(msg);
+    fn update(&mut self) -> error::Result<()> {
+        match self.discover_devices() {
+            Ok(new_devices) => {
+                self.send(DeviceSystemElementMessage::NewDevicesDiscovered(new_devices));
+            },
+            Err(_) => {},
+        }
 
         Ok(())
     }
@@ -93,13 +93,15 @@ impl DeviceDiscoverer for LanDiscoverer {
 
     fn open_link(&mut self, info: DeviceInfo) -> error::Result<Box<dyn DeviceLink>> {
         let lan_info = self.infos.get(&info).ok_or(error::Error::NoDevice)?.clone();
-        let link = LanLink::new(lan_info);
+        let link = LanLink::new(lan_info)
+            .map(Box::new)
+            .map_err(
+                |_| {
+                    self.infos.remove(&info);
+                    error::Error::DeviceUnreachable(info)
+                }
+            );
 
-        if link.is_err() {
-            self.infos.remove(&info);
-            self.send(DeviceSystemElementMessage::DeviceUnreachable(info));
-        }
-
-        Ok(Box::new(link?))
+        Ok(link?)
     }
 }

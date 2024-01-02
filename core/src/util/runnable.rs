@@ -3,14 +3,8 @@ use crate::error;
 use std::mem::ManuallyDrop;
 use std::ptr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ControlFlow {
-    Continue,
-    Break,
-}
-
 pub trait Runnable: AsRunnable {
-    fn update(&mut self, control_flow: Option<&mut ControlFlow>) -> error::Result<()>;
+    fn update(&mut self) -> error::Result<()>;
 
     fn on_start(&mut self) {}
 
@@ -23,8 +17,8 @@ pub trait Runnable: AsRunnable {
 }
 
 impl<T: Runnable + ?Sized> Runnable for &'_ mut T {
-    fn update(&mut self, control_flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        (**self).update(control_flow)
+    fn update(&mut self) -> error::Result<()> {
+        (**self).update()
     }
 
     fn on_start(&mut self) {
@@ -41,8 +35,8 @@ impl<T: Runnable + ?Sized> Runnable for &'_ mut T {
 }
 
 impl<T: Runnable + ?Sized> Runnable for Box<T> {
-    fn update(&mut self, control_flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        (**self).update(control_flow)
+    fn update(&mut self) -> error::Result<()> {
+        (**self).update()
     }
 
     fn on_start(&mut self) {
@@ -64,7 +58,7 @@ crate::impl_as_trait!(runnable -> Runnable);
 pub enum RunnableState {
     #[default]
     NotRunning,
-    Running(ControlFlow),
+    Running,
 }
 
 pub struct RunnableStateMachine<R: Runnable> {
@@ -84,17 +78,17 @@ impl<R: Runnable> RunnableStateMachine<R> {
         runnable.on_start();
 
         Self {
-            state: RunnableState::Running(ControlFlow::Continue),
+            state: RunnableState::Running,
             runnable,
         }
     }
 
     pub fn start(&mut self) -> error::Result<()> {
-        if matches!(self.state, RunnableState::Running(_)) {
+        if matches!(self.state, RunnableState::Running) {
             return Err(error::Error::WrongRunnableState);
         }
         self.runnable.on_start();
-        self.state = RunnableState::Running(ControlFlow::Continue);
+        self.state = RunnableState::Running;
 
         Ok(())
     }
@@ -112,15 +106,13 @@ impl<R: Runnable> RunnableStateMachine<R> {
     pub fn next_state(&mut self) -> error::Result<()> {
         match self.state {
             RunnableState::NotRunning => self.start(),
-            RunnableState::Running(_) => self.stop(),
+            RunnableState::Running => self.stop(),
         }
     }
 
     pub fn proceed(&mut self) -> Option<error::Result<()>> {
-        if let RunnableState::Running(ref mut control_flow) = self.state {
-            if matches!(control_flow, ControlFlow::Continue) {
-                return Some(self.runnable.update(Some(control_flow)));
-            }
+        if matches!(self.state, RunnableState::Running) {
+            return Some(self.runnable.update());
         }
 
         None
@@ -143,7 +135,7 @@ impl<R: Runnable> RunnableStateMachine<R> {
     }
 
     pub fn is_running(&self) -> bool {
-        matches!(self.state, RunnableState::Running(_))
+        matches!(self.state, RunnableState::Running)
     }
 }
 

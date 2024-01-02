@@ -7,7 +7,7 @@ use element::*;
 use link::*;
 use mueue::*;
 
-use crate::util::{Component, ControlFlow, Runnable};
+use crate::util::{Component, Runnable};
 
 use std::collections::HashMap;
 
@@ -78,7 +78,7 @@ impl Component for DeviceSystem {
 }
 
 impl Runnable for DeviceSystem {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> crate::error::Result<()> {
+    fn update(&mut self) -> crate::error::Result<()> {
         Ok(())
     }
 }

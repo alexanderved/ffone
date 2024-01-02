@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::device::DeviceInfo;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
@@ -13,6 +15,8 @@ pub enum Error {
     WrongNetworkPacketHeader,
     #[error("No device was found")]
     NoDevice,
+    #[error("The device cannot be reached")]
+    DeviceUnreachable(DeviceInfo),
     #[error("The device is not linked anymore")]
     DeviceUnlinked,
     #[error("The transition from the current runnable state to the next one is forbidden")]

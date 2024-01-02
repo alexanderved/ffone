@@ -3,7 +3,7 @@ mod tests;
 
 use crate::error;
 use crate::util::{
-    Clock, ClockTime, ControlFlow, Element, Runnable, SlaveClock, Timer, OBSERVATIONS_INTERVAL,
+    Clock, ClockTime, Element, Runnable, SlaveClock, Timer, OBSERVATIONS_INTERVAL,
 };
 
 use crate::audio_system::audio::{ResizableRawAudioBuffer, TimestampedRawAudioBuffer};
@@ -187,7 +187,7 @@ impl Synchronizer {
 }
 
 impl Runnable for Synchronizer {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
+    fn update(&mut self) -> error::Result<()> {
         if let Some(virtual_mic_clock) = self
             .virtual_mic_stats
             .as_ref()

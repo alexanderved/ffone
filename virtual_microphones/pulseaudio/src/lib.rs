@@ -60,7 +60,7 @@ impl PAVirtualMicrophone {
 }
 
 impl Runnable for PAVirtualMicrophone {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
+    fn update(&mut self) -> error::Result<()> {
         let Some(input) = self.input.as_ref() else {
             return Ok(());
         };

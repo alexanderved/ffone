@@ -33,7 +33,7 @@ impl AudioResizer {
 }
 
 impl Runnable for AudioResizer {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
+    fn update(&mut self) -> error::Result<()> {
         let Some(input) = self.input.as_ref() else {
             return Ok(());
         };
@@ -159,19 +159,15 @@ fn downsample(mut audio: RawAudioBuffer, mut desired_no_samples: usize) -> RawAu
     audio
 }
 
-fn take_average_sample<I>(mut sample_iter: I) -> Sample
+fn take_average_sample<I>(sample_iter: I) -> Sample
 where
     I: Iterator<Item = Sample> + ExactSizeIterator,
 {
-    /* let no_sample = sample_iter.len();
+    let no_sample = sample_iter.len();
     let avg_sample = sample_iter
-        .map(|s| dbg!(s))
         .map(|s| s / no_sample).sum::<Sample>();
-    println!("AVG = {:?}\n", avg_sample);
 
-    avg_sample */
-
-    sample_iter.next().unwrap()
+    avg_sample
 }
 
 fn add_silence(mut audio: RawAudioBuffer, desired_no_samples: usize) -> RawAudioBuffer {

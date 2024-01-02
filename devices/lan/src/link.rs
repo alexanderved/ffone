@@ -13,7 +13,7 @@ use core::device::*;
 use core::error;
 use core::util::ClockTime;
 use core::util::Element;
-use core::util::{ControlFlow, Runnable, Timer};
+use core::util::{Runnable, Timer};
 
 use core::mueue::*;
 
@@ -59,15 +59,13 @@ impl LanLink {
         })
     }
 
-    fn handle_ping(&mut self, flow: Option<&mut ControlFlow>) {
+    fn handle_ping(&mut self) {
         if self.ping_timer.is_time_out() {
             self.ping();
         }
 
         if self.pong_timer.is_time_out() {
-            if let Some(flow) = flow {
-                *flow = ControlFlow::Break;
-            }
+            self.send(DeviceSystemElementMessage::DeviceUnlinked);
         }
     }
 
@@ -113,8 +111,8 @@ impl Element for LanLink {
 }
 
 impl Runnable for LanLink {
-    fn update(&mut self, flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        self.handle_ping(flow);
+    fn update(&mut self) -> error::Result<()> {
+        self.handle_ping();
 
         self.poller
             .poll(&mut self.msg_stream, &mut self.audio_stream)?;

@@ -9,7 +9,7 @@ use core::audio_system::element::{AudioFilter, AudioSink, AudioSource, AudioSyst
 use core::audio_system::pipeline::audio_decoder::{AudioDecoder, AudioDecoderInfo};
 use core::error;
 use core::mueue::*;
-use core::util::{ControlFlow, Element, Runnable};
+use core::util::{Element, Runnable};
 
 pub struct GstDecoder {
     send: MessageSender<AudioSystemElementMessage>,
@@ -68,7 +68,7 @@ impl GstDecoder {
 }
 
 impl Runnable for GstDecoder {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
+    fn update(&mut self) -> error::Result<()> {
         let Some(input) = self.input.clone() else {
             return Ok(());
         };

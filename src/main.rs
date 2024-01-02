@@ -77,9 +77,9 @@ fn main() {
         // freq += 0.5;
 
         //let _ = dec.update(None);
-        let _ = sync.update(None);
-        let _ = resizer.update(None);
-        let _ = virtual_mic.update(None);
+        let _ = sync.update();
+        let _ = resizer.update();
+        let _ = virtual_mic.update();
     }
     
     /*

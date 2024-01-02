@@ -77,7 +77,7 @@ fn main() {
     } */
 
     loop {
-        let _ = mic.update(None);
+        let _ = mic.update();
 
         /* if !mic.queue.has_bytes() {
             break;

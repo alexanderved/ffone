@@ -62,7 +62,7 @@ impl Controller {
 }
 
 impl Runnable for Controller {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
+    fn update(&mut self) -> error::Result<()> {
         self.view_endpoint().iter().for_each(|_msg| todo!());
 
         self.audio_system_endpoint().iter().for_each(|_msg| todo!());

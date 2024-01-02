@@ -13,7 +13,7 @@ use virtual_microphone::*;
 use super::element::{AsAudioSink, AsAudioSource};
 
 use crate::error;
-use crate::util::{ControlFlow, Runnable, RunnableStateMachine};
+use crate::util::{Runnable, RunnableStateMachine};
 
 macro_rules! add_pipeline_element {
     (
@@ -193,10 +193,10 @@ impl AudioPipeline {
 }
 
 impl Runnable for AudioPipeline {
-    fn update(&mut self, _flow: Option<&mut ControlFlow>) -> error::Result<()> {
-        self.dec.as_mut().map(|dec| dec.update(None));
-        self.sync.as_mut().map(|sync| sync.update(None));
-        self.mic.as_mut().map(|mic| mic.update(None));
+    fn update(&mut self) -> error::Result<()> {
+        self.dec.as_mut().map(Runnable::update);
+        self.sync.as_mut().map(Runnable::update);
+        self.mic.as_mut().map(Runnable::update);
 
         Ok(())
     }
