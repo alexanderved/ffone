@@ -26,8 +26,6 @@ use ffone_ffi::rc::ffone_rc_unref;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
-const QUEUE_MAX_DURATION: ClockTime = ClockTime::from_micros(208310);
-
 pub struct PAVirtualMicrophone {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<RawAudioBuffer>>,
@@ -42,7 +40,7 @@ pub struct PAVirtualMicrophone {
 
 impl PAVirtualMicrophone {
     pub fn new(send: MessageSender<AudioSystemElementMessage>) -> Option<Self> {
-        let queue = RawAudioQueueRC::new(QUEUE_MAX_DURATION)?;
+        let queue = RawAudioQueueRC::new()?;
         let pa_ctx = unsafe { NonNull::new(ffone_pa_ctx_new(queue.clone().into_raw())) }?;
 
         Some(Self {
@@ -76,29 +74,15 @@ impl Runnable for PAVirtualMicrophone {
             self.started = true;
         }
 
-        /* if is_not_empty {
-            let prev_dur = self.available_duration.get();
-            let curr_dur = self.queue.duration();
-
-            dbg!(prev_dur, curr_dur, curr_dur - prev_dur);
-        } */
-
         if self.started {
-            unsafe { ffone_pa_ctx_update(self.pa_ctx.as_ptr(), 0) };
+            unsafe { ffone_pa_ctx_update(self.pa_ctx.as_ptr()) };
         }
-
-        
-        let available_duration = self.queue.available_duration();
         
         if is_not_empty {
             dbg!(self.queue.no_bytes(), self.queue.no_buffers());
         }
 
-        //if available_duration >= QUEUE_MAX_DURATION / 2 {
-            self.available_duration.set(available_duration);
-        /* } else {
-            self.available_duration.set(ClockTime::ZERO);
-        } */
+        self.available_duration.set(ClockTime::ZERO);
 
         Ok(())
     }
@@ -137,7 +121,7 @@ impl VirtualMicrophone for PAVirtualMicrophone {
         }
     }
 
-    fn provide_statistics(&self) -> VirtualMicrophoneStatistics {
+    fn provide_clock(&self) -> Option<Rc<dyn SlaveClock>> {
         let clock: Option<Rc<dyn SlaveClock>> = unsafe {
             let stream = ffone_pa_ctx_get_stream(self.pa_ctx.as_ptr());
             let stream = ffone_rc_ref(stream.cast()).cast::<FFonePAStream>();
@@ -149,7 +133,7 @@ impl VirtualMicrophone for PAVirtualMicrophone {
             }
         };
 
-        VirtualMicrophoneStatistics::new(clock, Rc::clone(&self.available_duration))
+        clock
     }
 }
 

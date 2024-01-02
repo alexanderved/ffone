@@ -1,7 +1,7 @@
-use core::{audio_system::{
+use core::audio_system::{
     audio::{RawAudioBuffer, RawAudioFormat},
     queue::RawAudioQueue,
-}, util::ClockTime};
+};
 
 use std::{
     mem::{self, ManuallyDrop},
@@ -11,7 +11,7 @@ use std::{
 use crate::rc::{ffone_rc_alloc0, ffone_rc_ref, ffone_rc_unref, ffone_rc_lock, ffone_rc_unlock};
 
 #[no_mangle]
-pub unsafe extern "C" fn ffone_raw_audio_queue_new(max_duration: u64) -> *mut RawAudioQueue {
+pub unsafe extern "C" fn ffone_raw_audio_queue_new() -> *mut RawAudioQueue {
     let rc = ffone_rc_alloc0(
         mem::size_of::<RawAudioQueue>(),
         Some(ffone_raw_audio_queue_dtor),
@@ -21,7 +21,7 @@ pub unsafe extern "C" fn ffone_raw_audio_queue_new(max_duration: u64) -> *mut Ra
         return ptr::null_mut();
     }
 
-    rc.write(RawAudioQueue::new(ClockTime::from_nanos(max_duration)));
+    rc.write(RawAudioQueue::new());
     rc
 }
 
@@ -251,8 +251,8 @@ pub unsafe extern "C" fn ffone_raw_audio_queue_read_bytes_with_props(
 pub struct RawAudioQueueRC(*mut RawAudioQueue);
 
 impl RawAudioQueueRC {
-    pub fn new(max_duration: ClockTime) -> Option<Self> {
-        let queue = unsafe { ffone_raw_audio_queue_new(max_duration.as_nanos()) };
+    pub fn new() -> Option<Self> {
+        let queue = unsafe { ffone_raw_audio_queue_new() };
 
         if !queue.is_null() {
             Some(Self(queue))
@@ -290,26 +290,6 @@ impl RawAudioQueueRC {
             ffone_rc_unlock(self.0.cast());
 
             no_bytes
-        }
-    }
-
-    pub fn duration(&self) -> ClockTime {
-        unsafe {
-            ffone_rc_lock(self.0.cast());
-            let duration = (*self.0).duration();
-            ffone_rc_unlock(self.0.cast());
-
-            duration
-        }
-    }
-
-    pub fn available_duration(&self) -> ClockTime {
-        unsafe {
-            ffone_rc_lock(self.0.cast());
-            let available_duration = (*self.0).available_duration();
-            ffone_rc_unlock(self.0.cast());
-
-            available_duration
         }
     }
 

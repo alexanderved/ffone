@@ -79,7 +79,7 @@ ffone_rc_ptr(FFonePAStream) ffone_pa_ctx_get_stream(ffone_rc_ptr(FFonePAContext)
     return pa_ctx->stream;
 }
 
-int ffone_pa_ctx_update(ffone_rc_ptr(FFonePAContext) pa_ctx, int block) {
+int ffone_pa_ctx_update(ffone_rc_ptr(FFonePAContext) pa_ctx) {
     FFONE_RETURN_VAL_ON_FAILURE(pa_ctx, FFONE_ERROR_INVALID_ARG);
 
     if (pa_ctx->stream) {

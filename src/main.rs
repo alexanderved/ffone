@@ -33,7 +33,7 @@ fn main() {
     sync.chain(&mut resizer);
     resizer.chain(&mut virtual_mic);
 
-    sync.set_virtual_microphone_statistics(virtual_mic.provide_statistics());
+    sync.set_virtual_microphone_clock(virtual_mic.provide_clock());
 
     let input = sync.create_input();
 

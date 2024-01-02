@@ -1,23 +1,15 @@
-use crate::util::ClockTime;
-
 use super::audio::{RawAudioBuffer, RawAudioFormat};
 
 use std::collections::VecDeque;
 
 pub struct RawAudioQueue {
-    max_duration: ClockTime,
-    duration: ClockTime,
-
     buffers: VecDeque<RawAudioBuffer>,
     front_buffer_offset: usize,
 }
 
 impl RawAudioQueue {
-    pub fn new(max_duration: ClockTime) -> Self {
+    pub fn new() -> Self {
         Self {
-            max_duration,
-            duration: ClockTime::ZERO,
-
             buffers: VecDeque::new(),
             front_buffer_offset: 0,
         }
@@ -47,26 +39,7 @@ impl RawAudioQueue {
         self.buffers.iter().map(|b| b.len()).sum::<usize>() - self.front_buffer_offset
     }
 
-    pub fn max_duration(&self) -> ClockTime {
-        self.max_duration
-    }
-
-    pub fn duration(&self) -> ClockTime {
-        self.duration
-    }
-
-    pub fn available_duration(&self) -> ClockTime {
-        self.max_duration() - self.duration()
-    }
-
     pub fn push_buffer(&mut self, buffer: RawAudioBuffer) {
-        self.duration += buffer.duration();
-
-        /* if self.duration() > self.max_duration() {
-            buffer.truncate_duration(self.duration() - self.max_duration());
-            self.duration = self.max_duration();
-        } */
-
         self.buffers.push_back(buffer);
     }
 
@@ -77,14 +50,6 @@ impl RawAudioQueue {
             let start = self.front_buffer_offset;
             let end = self.front_buffer_offset + desired.min(available);
             self.front_buffer_offset = end;
-
-            self.duration = self.duration.saturating_sub(
-                ClockTime::from_no_bytes(
-                    end - start,
-                    front_buffer.sample_rate(),
-                    front_buffer.format()
-                )
-            );
 
             (
                 front_buffer.as_slice()[start..end].to_vec(),

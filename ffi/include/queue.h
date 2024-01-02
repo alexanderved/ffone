@@ -8,7 +8,7 @@
 
 typedef struct RawAudioQueue RawAudioQueue;
 
-RawAudioQueue *ffone_raw_audio_queue_new(uint64_t max_duration);
+RawAudioQueue *ffone_raw_audio_queue_new(void);
 
 bool ffone_raw_audio_queue_has_bytes_locked(RawAudioQueue *queue);
 
