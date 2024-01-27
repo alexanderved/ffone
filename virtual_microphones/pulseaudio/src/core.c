@@ -109,43 +109,43 @@ static void ffone_pa_core_dtor(void *opaque) {
     core->loop = NULL;
 }
 
-pa_context *ffone_pa_core_get_context(ffone_rc_ptr(FFonePACore) core) {
+pa_context *ffone_pa_core_get_context(FFonePACore *core) {
     FFONE_RETURN_VAL_ON_FAILURE(core, NULL);
 
     return core->context;
 }
 
-pa_threaded_mainloop *ffone_pa_core_get_loop(ffone_rc_ptr(FFonePACore) core) {
+pa_threaded_mainloop *ffone_pa_core_get_loop(FFonePACore *core) {
     FFONE_RETURN_VAL_ON_FAILURE(core, NULL);
 
     return core->loop;
 }
 
-void ffone_pa_core_loop_lock(ffone_rc_ptr(FFonePACore) core) {
+void ffone_pa_core_loop_lock(FFonePACore *core) {
     FFONE_RETURN_ON_FAILURE(core);
 
     pa_threaded_mainloop_lock(ffone_pa_core_get_loop(core));
 }
 
-void ffone_pa_core_loop_unlock(ffone_rc_ptr(FFonePACore) core) {
+void ffone_pa_core_loop_unlock(FFonePACore *core) {
     FFONE_RETURN_ON_FAILURE(core);
 
     pa_threaded_mainloop_unlock(ffone_pa_core_get_loop(core));
 }
 
-void ffone_pa_core_loop_signal(ffone_rc_ptr(FFonePACore) core, int val) {
+void ffone_pa_core_loop_signal(FFonePACore *core, int val) {
     FFONE_RETURN_ON_FAILURE(core);
 
     pa_threaded_mainloop_signal(ffone_pa_core_get_loop(core), val);
 }
 
-void ffone_pa_core_loop_wait(ffone_rc_ptr(FFonePACore) core) {
+void ffone_pa_core_loop_wait(FFonePACore *core) {
     FFONE_RETURN_ON_FAILURE(core);
 
     pa_threaded_mainloop_wait(ffone_pa_core_get_loop(core));
 }
 
-int ffone_pa_core_execute_operation(ffone_rc_ptr(FFonePACore) core, pa_operation *o) {
+int ffone_pa_core_execute_operation(FFonePACore *core, pa_operation *o) {
     FFONE_RETURN_VAL_ON_FAILURE(core && o, FFONE_ERROR_INVALID_ARG);
 
     pa_threaded_mainloop *loop = ffone_pa_core_get_loop(core);
@@ -161,7 +161,7 @@ int ffone_pa_core_execute_operation(ffone_rc_ptr(FFonePACore) core, pa_operation
 }
 
 int ffone_pa_core_load_virtual_device(
-    ffone_rc_ptr(FFonePACore) core,
+    FFonePACore *core,
     const char *module,
     const char *args,
     pa_context_index_cb_t cb,
@@ -192,7 +192,7 @@ operation_error:
 }
 
 int ffone_pa_core_unload_virtual_device(
-    ffone_rc_ptr(FFonePACore) core,
+    FFonePACore *core,
     uint32_t idx,
     pa_context_success_cb_t cb,
     void *userdata

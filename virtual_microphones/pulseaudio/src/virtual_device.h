@@ -19,14 +19,14 @@ typedef struct FFonePAVirtualSink FFonePAVirtualSink;
 typedef uint32_t FFonePAVirtualDeviceFlags;
 
 #define FFONE_PA_VIRTUAL_DEVICE_FLAGS_NONE 0
-#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_CREATED 1U << 0
-#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_LOADED 1U << 1
+#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_CREATED (1U << 0)
+#define FFONE_PA_VIRTUAL_DEVICE_FLAGS_LOADED (1U << 1)
 
 ffone_rc(FFonePAVirtualSource) ffone_pa_virtual_source_new(
-    ffone_rc_ptr(FFonePACore) core,
-    ffone_rc_ptr(FFonePAVirtualSink) master
+    FFonePACore *core,
+    FFonePAVirtualSink *master
 );
 
-ffone_rc(FFonePAVirtualSink) ffone_pa_virtual_sink_new(ffone_rc_ptr(FFonePACore) core);
+ffone_rc(FFonePAVirtualSink) ffone_pa_virtual_sink_new(FFonePACore *core);
 
 #endif /* _FFONE_VIRTUAL_DEVICE_H */

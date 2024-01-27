@@ -3,11 +3,7 @@ extern crate ffi as ffone_ffi;
 mod clock;
 mod ffi;
 
-use self::ffi::ffone_pa_ctx_get_stream;
-use self::ffi::ffone_pa_ctx_new;
-use self::ffi::ffone_pa_ctx_update;
-use self::ffi::FFonePAContext;
-use self::ffi::FFonePAStream;
+use self::ffi::*;
 use clock::PAClock;
 
 use core::audio_system::audio::RawAudioBuffer;
@@ -17,7 +13,6 @@ use core::audio_system::pipeline::virtual_microphone::*;
 use core::error;
 use core::mueue::*;
 use core::util::*;
-use std::cell::Cell;
 
 use ffone_ffi::audio_system::queue::RawAudioQueueRC;
 use ffone_ffi::rc::ffone_rc_ref;
@@ -26,64 +21,79 @@ use ffone_ffi::rc::ffone_rc_unref;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
+const MAX_PREBUF: usize = 0;
+
 pub struct PAVirtualMicrophone {
     send: MessageSender<AudioSystemElementMessage>,
     input: Option<MessageReceiver<RawAudioBuffer>>,
 
     queue: RawAudioQueueRC,
-    available_duration: Rc<Cell<ClockTime>>,
 
-    pa_ctx: NonNull<FFonePAContext>,
+    pa_core: NonNull<FFonePACore>,
+    pa_stream: *mut FFonePAStream,
 
-    started: bool,
+    prebuf: usize,
+    playing: bool,
 }
 
 impl PAVirtualMicrophone {
     pub fn new(send: MessageSender<AudioSystemElementMessage>) -> Option<Self> {
         let queue = RawAudioQueueRC::new()?;
-        let pa_ctx = unsafe { NonNull::new(ffone_pa_ctx_new(queue.clone().into_raw())) }?;
+        let pa_core = unsafe { NonNull::new(ffone_pa_core_new()) }?;
 
         Some(Self {
             send,
             input: None,
 
             queue,
-            available_duration: Rc::new(Cell::new(ClockTime::ZERO)),
 
-            pa_ctx,
+            pa_core,
+            pa_stream: std::ptr::null_mut(),
 
-            started: false,
+            prebuf: 0,
+            playing: false,
         })
     }
 }
 
 impl Runnable for PAVirtualMicrophone {
+    fn on_start(&mut self) {
+        if !self.pa_stream.is_null() {
+            unsafe {
+                ffone_rc_unref(self.pa_stream.cast());
+            }
+        }
+
+        self.pa_stream = unsafe {
+            ffone_pa_stream_new(self.pa_core.as_ptr().cast(), self.queue.clone().into_raw())
+        };
+    }
+
+    fn on_stop(&mut self) {
+        unsafe {
+            ffone_rc_unref(self.pa_stream.cast());
+        }
+    }
+
     fn update(&mut self) -> error::Result<()> {
         let Some(input) = self.input.as_ref() else {
             return Ok(());
         };
 
-        let audios = input.iter().collect::<Vec<_>>();
-        let is_not_empty = !audios.is_empty();
+        for audio in input.iter() {
+            self.prebuf += 1;
 
-        for audio in audios {
             self.queue.push_buffer(audio);
         }
 
-        if self.queue.no_buffers() >= 3 {
-            self.started = true;
-        }
+        if self.prebuf > MAX_PREBUF && !self.playing {
+            unsafe {
+                ffone_pa_stream_play(self.pa_stream);
+            }
 
-        if self.started {
-            unsafe { ffone_pa_ctx_update(self.pa_ctx.as_ptr()) };
+            self.playing = true;
         }
         
-        if is_not_empty {
-            dbg!(self.queue.no_bytes(), self.queue.no_buffers());
-        }
-
-        self.available_duration.set(ClockTime::ZERO);
-
         Ok(())
     }
 }
@@ -123,8 +133,7 @@ impl VirtualMicrophone for PAVirtualMicrophone {
 
     fn provide_clock(&self) -> Option<Rc<dyn SlaveClock>> {
         let clock: Option<Rc<dyn SlaveClock>> = unsafe {
-            let stream = ffone_pa_ctx_get_stream(self.pa_ctx.as_ptr());
-            let stream = ffone_rc_ref(stream.cast()).cast::<FFonePAStream>();
+            let stream = ffone_rc_ref(self.pa_stream.cast()).cast::<FFonePAStream>();
             if stream.is_null() {
                 None
             } else {
@@ -140,7 +149,7 @@ impl VirtualMicrophone for PAVirtualMicrophone {
 impl Drop for PAVirtualMicrophone {
     fn drop(&mut self) {
         unsafe {
-            ffone_rc_unref(self.pa_ctx.as_ptr().cast());
+            ffone_rc_unref(self.pa_core.as_ptr().cast());
         }
     }
 }

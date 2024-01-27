@@ -4,7 +4,6 @@
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdatomic.h>
-#include <pthread.h>
 
 typedef struct RcHeader {
     alignas(max_align_t) atomic_size_t strong_count;
@@ -44,7 +43,7 @@ ffone_rc(void) ffone_rc_alloc0(size_t size, ffone_rc_dtor_t dtor) {
     return (ffone_rc(void))(rc_header + 1);
 }
 
-void ffone_rc_set_dtor(ffone_rc_ptr(void) rc, ffone_rc_dtor_t dtor) {
+void ffone_rc_set_dtor(void *rc, ffone_rc_dtor_t dtor) {
     if (!rc) {
         return;
     }
@@ -53,7 +52,7 @@ void ffone_rc_set_dtor(ffone_rc_ptr(void) rc, ffone_rc_dtor_t dtor) {
     atomic_store(&rc_header->dtor, dtor);
 }
 
-ffone_rc(void) ffone_rc_ref(ffone_rc_ptr(void) rc) {
+ffone_rc(void) ffone_rc_ref(void *rc) {
     if (!rc) {
         return NULL;
     }
@@ -85,20 +84,29 @@ void ffone_rc_unref(ffone_rc(void) rc) {
     }
 }
 
-void ffone_rc_lock(ffone_rc_ptr(void) rc) {
+void ffone_rc_lock(void *rc) {
     if (!rc) {
         return;
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    /* ffone_assert( */pthread_mutex_lock(&rc_header->mutex)/*  == 0) */;
+    ffone_assert(pthread_mutex_lock(&rc_header->mutex) == 0);
 }
 
-void ffone_rc_unlock(ffone_rc_ptr(void) rc) {
+void ffone_rc_unlock(void *rc) {
     if (!rc) {
         return;
     }
 
     RcHeader *rc_header = (RcHeader *)rc - 1;
-    /* ffone_assert( */pthread_mutex_unlock(&rc_header->mutex)/*  == 0) */;
+    ffone_assert(pthread_mutex_unlock(&rc_header->mutex) == 0);
+}
+
+int ffone_rc_cond_wait(void *rc, pthread_cond_t *cond) {
+    if (!rc) {
+        return 0;
+    }
+
+    RcHeader *rc_header = (RcHeader *)rc - 1;
+    return pthread_cond_wait(cond, &rc_header->mutex);
 }

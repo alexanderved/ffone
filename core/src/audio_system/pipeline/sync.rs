@@ -120,7 +120,7 @@ impl Synchronizer {
 
                 if real_duration.abs_diff(buf_duration) < AUDIO_RESCALE_THRESHOLD {
                     self.cumulative_delay += buf_duration - real_duration;
-                    dbg!(self.cumulative_delay);
+                    //dbg!(self.cumulative_delay);
 
                     real_duration = buf_duration;
                 }

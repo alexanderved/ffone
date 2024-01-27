@@ -24,6 +24,10 @@
         "utility": "c",
         "audio.h": "c",
         "queue.h": "c",
-        "pulseaudio.h": "c"
-    }
+        "pulseaudio.h": "c",
+        "error.h": "c"
+    },
+    "C_Cpp.codeAnalysis.clangTidy.checks.disabled": [
+        "clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling"
+    ]
 }

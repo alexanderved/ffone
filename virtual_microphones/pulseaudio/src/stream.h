@@ -15,20 +15,19 @@
 typedef uint32_t StreamFlags;
 
 #define FFONE_STREAM_FLAG_NONE 0
-#define FFONE_STREAM_FLAG_OUTDATED_PROPS 1U << 2
+#define FFONE_STREAM_FLAG_PLAYING (1U << 1)
+#define FFONE_STREAM_FLAG_OUTDATED_PROPS (1U << 2)
+#define FFONE_STREAM_FLAG_DESTRUCTING (1U << 3)
 
 typedef struct FFonePAStream FFonePAStream;
 
 ffone_rc(FFonePAStream) ffone_pa_stream_new(
-    ffone_rc_ptr(FFonePACore) core,
-    ffone_rc_ptr(FFonePAVirtualSink) sink,
-    ffone_rc(RawAudioQueue) queue,
-    uint32_t sample_rate,
-    RawAudioFormat format
+    FFonePACore *core,
+    RawAudioQueue *queue
 );
 
-void ffone_pa_stream_update(ffone_rc_ptr(FFonePAStream) stream);
+void ffone_pa_stream_play(FFonePAStream *stream);
 
-uint64_t ffone_pa_stream_get_time(ffone_rc_ptr(FFonePAStream) stream);
+uint64_t ffone_pa_stream_get_time(FFonePAStream *stream);
 
 #endif /* _FFONE_STREAM_H */
