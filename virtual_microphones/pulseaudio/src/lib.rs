@@ -65,7 +65,7 @@ impl Runnable for PAVirtualMicrophone {
         }
 
         self.pa_stream = unsafe {
-            ffone_pa_stream_new(self.pa_core.as_ptr().cast(), self.queue.clone().into_raw())
+            ffone_pa_stream_new(self.pa_core.as_ptr().cast(), self.queue.as_raw())
         };
     }
 

@@ -297,6 +297,10 @@ impl RawAudioQueueRC {
         ManuallyDrop::new(self).0
     }
 
+    pub fn as_raw(&self) -> *mut RawAudioQueue {
+        self.0
+    }
+
     pub fn push_buffer(&self, buffer: RawAudioBuffer) {
         unsafe {
             ffone_rc_lock(self.0.cast());
