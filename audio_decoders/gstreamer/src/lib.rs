@@ -1,9 +1,9 @@
 mod gst_context;
 
-use gst_context::GstContext;
+pub use gst_context::GstContext;
 
 use core::audio_system::audio::{
-    EncodedAudioBuffer, EncodedAudioHeader, TimestampedRawAudioBuffer,
+    EncodedAudioBuffer, EncodedAudioHeader, TimestampedRawAudioBuffer
 };
 use core::audio_system::element::{AudioFilter, AudioSink, AudioSource, AudioSystemElementMessage};
 use core::audio_system::pipeline::audio_decoder::{AudioDecoder, AudioDecoderInfo};
@@ -47,7 +47,7 @@ impl GstDecoder {
         }
     }
 
-    fn drain(&self) {
+    pub fn drain(&self) {
         let Some(context) = self.context.as_ref() else {
             return;
         };

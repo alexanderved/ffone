@@ -15,7 +15,7 @@ use gstreamer as gst;
 use gstreamer_app as gst_app;
 
 #[allow(dead_code)]
-pub(super) struct GstContext {
+pub struct GstContext {
     audio_info: EncodedAudioHeader,
 
     pub pipeline: gst::Pipeline,
@@ -23,20 +23,21 @@ pub(super) struct GstContext {
     src: gst_app::AppSrc,
     parser: gst::Element,
     decoder: gst::Element,
+    convert: gst::Element,
     sink: gst_app::AppSink,
 }
 
 impl GstContext {
-    pub(super) fn new(audio_info: EncodedAudioHeader) -> Self {
+    pub fn new(audio_info: EncodedAudioHeader) -> Self {
         let pipeline = gst::Pipeline::new(Some("gst_audio_decoder_pipeline"));
 
-        let caps = gst::Caps::builder(mime_from_codec(audio_info.codec))
+        let src_caps = gst::Caps::builder(mime_from_codec(audio_info.codec))
             .field("rate", audio_info.sample_rate)
             .field("channels", 1)
             .build();
         let src = gst_app::AppSrc::builder()
             .name("src")
-            .caps(&caps)
+            .caps(&src_caps)
             .stream_type(gst_app::AppStreamType::Stream)
             .build();
 
@@ -49,13 +50,26 @@ impl GstContext {
             .name("decoder")
             .build()
             .unwrap();
-        let sink = gst_app::AppSink::builder().name("sink").build();
+
+        let convert = gst::ElementFactory::make("audioconvert")
+            .name("convert")
+            .build()
+            .unwrap();
+
+        let sink_caps = gst::Caps::builder("audio/x-raw")
+            .field("channels", 1)
+            .build();
+        let sink = gst_app::AppSink::builder()
+            .name("sink")
+            .caps(&sink_caps)
+            .build();
         sink.set_sync(false);
 
         pipeline
-            .add_many(&[src.upcast_ref(), &parser, &decoder, sink.upcast_ref()])
+            .add_many(&[src.upcast_ref(), &parser, &decoder, &convert, sink.upcast_ref()])
             .unwrap();
-        gst::Element::link_many(&[src.upcast_ref(), &parser, &decoder, sink.upcast_ref()]).unwrap();
+        gst::Element::link_many(&[src.upcast_ref(), &parser,
+            &decoder, &convert, sink.upcast_ref()]).unwrap();
 
         let this = Self {
             audio_info,
@@ -65,6 +79,7 @@ impl GstContext {
             src,
             parser,
             decoder,
+            convert,
             sink,
         };
         this.make_playing();
@@ -72,7 +87,7 @@ impl GstContext {
         this
     }
 
-    pub(super) fn push(&self, buffer: EncodedAudioBuffer) {
+    pub fn push(&self, buffer: EncodedAudioBuffer) {
         let mut gst_buffer = gst::Buffer::from_slice(buffer.data);
 
         if let Some(gst_buffer) = gst_buffer.get_mut() {
@@ -87,7 +102,7 @@ impl GstContext {
         let _ = self.src.push_buffer(gst_buffer);
     }
 
-    pub(super) fn pull(&self) -> Option<TimestampedRawAudioBuffer> {
+    pub fn pull(&self) -> Option<TimestampedRawAudioBuffer> {
         let sample = self
             .sink
             .try_pull_sample(Some(gst::ClockTime::from_mseconds(1)))?;
@@ -98,23 +113,23 @@ impl GstContext {
         Some(TimestampedRawAudioBuffer::new(raw, start))
     }
 
-    pub(super) fn push_eos(&self) {
+    pub fn push_eos(&self) {
         let _ = self.src.end_of_stream();
     }
 
-    pub(super) fn is_eos(&self) -> bool {
+    pub fn is_eos(&self) -> bool {
         self.sink.is_eos()
     }
 
-    pub(super) fn make_playing(&self) {
+    pub fn make_playing(&self) {
         self.pipeline.set_state(gst::State::Playing).unwrap();
     }
 
-    pub(super) fn make_null(&self) {
+    pub fn make_null(&self) {
         self.pipeline.set_state(gst::State::Null).unwrap();
     }
 
-    pub(super) fn is_playing_failed(&self) -> bool {
+    pub fn is_playing_failed(&self) -> bool {
         let (res, _, pending) = self.pipeline.state(Some(gst::ClockTime::from_mseconds(0)));
 
         res.is_err() && pending == gst::State::Playing

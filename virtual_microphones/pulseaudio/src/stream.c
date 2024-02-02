@@ -149,6 +149,9 @@ static void stream_dtor(void *opaque) {
 
     pthread_cond_destroy(&stream->write_cond);
 
+    if (stream->source) ffone_rc_unref(stream->source);
+    stream->source = NULL;
+
     if (stream->sink) ffone_rc_unref(stream->sink);
     stream->sink = NULL;
 
@@ -345,6 +348,7 @@ static void try_write_locked(FFonePAStream *stream) {
     ffone_rc_unlock(queue);
 
     if (write_buffer_end - write_buffer_cursor > 0) {
+        //puts("SILENCE");
         memset(write_buffer_cursor, 0, write_buffer_end - write_buffer_cursor);
     }
 

@@ -229,6 +229,7 @@ dependencies = [
  "ffone_lan_device",
  "ffone_pa_virtual_microphone",
  "gstreamer",
+ "gstreamer-app",
  "serde_json",
 ]
 

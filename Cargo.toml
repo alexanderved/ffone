@@ -11,6 +11,7 @@ ffi = { package = "ffone_ffi", version = "0.1.0", path = "ffi" }
 crossbeam-utils = "0.8.16"
 lan_device = { package = "ffone_lan_device", version = "0.1.0", path = "devices/lan" }
 gst = { package = "gstreamer", version = "0.20.7" }
+gst_app = { package = "gstreamer-app", version = "0.20.7" }
 serde_json = "1.0.107"
 
 [dependencies.gstreamer]

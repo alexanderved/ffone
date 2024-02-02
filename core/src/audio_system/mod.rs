@@ -26,7 +26,7 @@ impl Message for AudioSystemMessage {}
 
 #[non_exhaustive]
 pub enum AudioSystemControlMessage {
-    Stop,
+
 }
 
 impl Message for AudioSystemControlMessage {}
@@ -174,12 +174,16 @@ impl Component for AudioSystem {
 }
 
 impl Runnable for AudioSystem {
-    fn update(&mut self) -> error::Result<()> {
-        todo!()
-    }
-
     fn on_start(&mut self) {
         let _ = self.pipeline.start();
+    }
+
+    fn on_stop(&mut self) {
+        let _ = self.pipeline.stop();
+    }
+
+    fn update(&mut self) -> error::Result<()> {
+        todo!()
     }
 }
 
